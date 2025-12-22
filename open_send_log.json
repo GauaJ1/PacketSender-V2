@@ -1,0 +1,14 @@
+{
+  "target": "192.168.0.249",
+  "port": 1467,
+  "sent": 1,
+  "entries": [
+    {
+      "ts": 1766440452.4388492,
+      "src": "default",
+      "dst": "192.168.0.249",
+      "dport": 1467,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+    }
+  ]
+}
