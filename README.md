@@ -9,6 +9,7 @@ Arquivos principais
 - `PacketSend.py`: envia pacotes SYN (modo interativo). Salva log JSON (padrão `open_send_log.json`). Pode iniciar captura automática (AsyncSniffer) e incluir `captured.syns` no log. Requer Npcap + execução como Administrador para envio/injeção L2.
 - `verify_capture.py`: captura e conta SYNs observados em uma interface; pode rodar em modo interativo ou por CLI. Requer Npcap + privilégios elevados.
 - `scan_ports.py`: scanner TCP concorrente (connect scan) e opção `--syn` para SYN scan via Scapy (requer Npcap/Admin). Possui modo interativo quando executado sem argumentos.
+- `scan_ports.py`: scanner TCP concorrente (connect scan) e opções `--syn` para SYN scan via Scapy (requer Npcap/Admin) e `--mac` para obter endereço MAC via ARP (rede local). Possui modo interativo quando executado sem argumentos.
 - `open_send_log.json`: gerado por `PacketSend.py` (registro dos envios e quantidade capturada).
 - `open_ports.json`: pode ser gerado por `scan_ports.py` com a opção `--save` (resultados do scan).
 
@@ -53,6 +54,16 @@ python scan_ports.py
 # CLI exemplo
 python scan_ports.py 192.168.92.212 --start 1 --end 1024 --workers 200 --timeout 0.5 --save open_ports.json
 ```
+
+3b) `scan_ports.py` (ARP lookup — obter MAC do alvo na rede local)
+```powershell
+# Obter apenas o MAC (tenta popular a cache ARP antes de consultar):
+python scan_ports.py 192.168.1.10 --mac
+
+# Combinar com scan e salvar resultado (incluirá o campo `mac` no JSON):
+python scan_ports.py 192.168.1.10 --start 1 --end 1024 --workers 200 --timeout 0.5 --mac --save open_ports_with_mac.json
+```
+Nota: a opção `--mac` faz um ping rápido para popular a cache ARP e então consulta a tabela ARP local (`arp -a` no Windows, `ip neigh` / `arp -n` em Unix). Funciona somente em hosts na mesma sub-rede/segmento (rede local). Se o alvo estiver fora da LAN ou a entrada ARP estiver filtrada/ausente, o MAC pode não ser encontrado.
 4) `scan_ports.py` (SYN scan com Scapy — requer Npcap/Admin)
 ```powershell
 python scan_ports.py 192.168.92.212 --start 1 --end 1024 --syn --workers 200 --timeout 1.0 --save syn_results.json

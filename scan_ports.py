@@ -21,6 +21,9 @@ import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import time
+import subprocess
+import platform
+import re
 
 
 def scan_port(host, port, timeout):
@@ -38,6 +41,52 @@ def scan_port(host, port, timeout):
         return port, 'error'
 
 
+def get_mac_for_ip(ip, timeout=0.5):
+    """Tenta obter o MAC address do `ip` consultando a tabela ARP local.
+    Faz um ping rápido para popular a cache ARP e então executa comandos
+    locais (`arp -a`, `ip neigh`, `arp -n`) conforme o SO.
+    Retorna o MAC como string ou None se não encontrado.
+    """
+    system = platform.system().lower()
+    # Ping to populate ARP cache
+    try:
+        if system == 'windows':
+            ping_cmd = ['ping', '-n', '1', '-w', str(int(timeout * 1000)), ip]
+        else:
+            ping_cmd = ['ping', '-c', '1', '-W', str(int(max(1, timeout)) ), ip]
+        subprocess.run(ping_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout + 1)
+    except Exception:
+        pass
+
+    try:
+        if system == 'windows':
+            out = subprocess.check_output(['arp', '-a'], encoding='utf-8', errors='ignore')
+            # Windows arp -a lines:  192.168.1.10           01-23-45-67-89-ab     dynamic
+            m = re.search(rf'^{re.escape(ip)}\s+([0-9a-fA-F\-:]+)\s+', out, re.MULTILINE)
+            if m:
+                return m.group(1)
+        else:
+            # Try `ip neigh` first
+            try:
+                out = subprocess.check_output(['ip', 'neigh'], encoding='utf-8', errors='ignore')
+                m = re.search(rf'^{re.escape(ip)}\s+.*lladdr\s+([0-9a-fA-F:]+)', out, re.MULTILINE)
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
+            # Fallback to arp -n
+            try:
+                out = subprocess.check_output(['arp', '-n', ip], encoding='utf-8', errors='ignore')
+                m = re.search(r'(([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2})', out)
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description='TCP connect port scanner (concurrent)')
     parser.add_argument('target', help='IP ou hostname a escanear')
@@ -48,6 +97,7 @@ def main():
     parser.add_argument('--save', help='Salvar resultado em JSON')
     parser.add_argument('--rate', type=float, default=0.0, help='Delay (s) entre submissões de tarefas para reduzir carga (default 0)')
     parser.add_argument('--syn', action='store_true', help='Usar SYN scan com Scapy (requer Npcap/Admin)')
+    parser.add_argument('--mac', action='store_true', help='Obter endereço MAC do alvo usando ARP (rede local)')
     # Modo interativo quando nenhum argumento é passado
     if len(sys.argv) == 1:
         print('Modo interativo: insira os valores solicitados (Enter = padrão)')
@@ -70,6 +120,14 @@ def main():
     except Exception as e:
         print('Falha ao resolver host:', e)
         return
+
+    mac_addr = None
+    if getattr(args, 'mac', False):
+        mac_addr = get_mac_for_ip(target_ip, args.timeout)
+        if mac_addr:
+            print(f'MAC: {mac_addr}')
+        else:
+            print('MAC não encontrado (pode estar fora da rede local ou bloqueado).')
 
     # If SYN scan requested, use Scapy-based scan
     if getattr(args, 'syn', False):
@@ -134,7 +192,8 @@ def main():
                 'open_ports': sorted(open_ports),
                 'results': results,
                 'elapsed': elapsed,
-                'method': 'syn'
+                'method': 'syn',
+                'mac': mac_addr
             }
             with open(args.save, 'w', encoding='utf-8') as f:
                 json.dump(out, f, indent=2)
@@ -177,7 +236,8 @@ def main():
             'end': args.end,
             'open_ports': sorted(open_ports),
             'results': results,
-            'elapsed': elapsed
+            'elapsed': elapsed,
+            'mac': mac_addr
         }
         with open(args.save, 'w', encoding='utf-8') as f:
             json.dump(out, f, indent=2)
