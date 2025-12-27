@@ -1,4 +1,5 @@
-from scapy.all import conf, get_if_list, sendp, Ether, IP, TCP, AsyncSniffer
+from scapy.all import conf, get_if_list, sendp, send, Ether, IP, IPv6, TCP, AsyncSniffer
+import socket
 import time
 import json
 import signal
@@ -14,9 +15,37 @@ def enviar_syn(destino_ip, destino_porta, intervalo=0, count=0, duration=0, orig
     - duration: duração total em segundos (0 = indefinido)
     - logfile: caminho para salvar log JSON (se fornecido, salva lista de envios)
     """
-    ip = IP(dst=destino_ip)
-    if origem_ip:
-        ip.src = origem_ip
+    # Resolve the destination to determine address family (IPv4 vs IPv6)
+    resolved_ip = destino_ip
+    family = None
+    try:
+        infos = socket.getaddrinfo(destino_ip, None)
+        if infos:
+            family = infos[0][0]
+            resolved_ip = infos[0][4][0]
+    except Exception:
+        # Fallback: try to detect IPv6 literal
+        try:
+            socket.inet_pton(socket.AF_INET6, destino_ip)
+            family = socket.AF_INET6
+        except Exception:
+            family = socket.AF_INET
+
+    is_ipv6 = (family == socket.AF_INET6)
+    if is_ipv6:
+        ip = IPv6(dst=resolved_ip)
+        if origem_ip:
+            try:
+                ip.src = origem_ip
+            except Exception:
+                pass
+    else:
+        ip = IP(dst=resolved_ip)
+        if origem_ip:
+            try:
+                ip.src = origem_ip
+            except Exception:
+                pass
 
     tcp = TCP(dport=destino_porta, flags='S', sport=12345)
 
@@ -34,12 +63,12 @@ def enviar_syn(destino_ip, destino_porta, intervalo=0, count=0, duration=0, orig
 
     def _handle_capture(pkt):
         try:
-            if IP in pkt and TCP in pkt:
-                # SYN without ACK
+            # Handle IPv4 and IPv6 packets
+            if TCP in pkt:
                 flags = pkt[TCP].flags
                 if (flags & 0x02) and not (flags & 0x10):
                     # If destination matches (may be L2 or L3), increment
-                    if pkt[IP].dst == destino_ip:
+                    if (IPv6 in pkt and getattr(pkt[IPv6], 'dst', None) == destino_ip) or (IP in pkt and getattr(pkt[IP], 'dst', None) == destino_ip):
                         captured['syns'] += 1
         except Exception:
             pass
@@ -50,7 +79,11 @@ def enviar_syn(destino_ip, destino_porta, intervalo=0, count=0, duration=0, orig
         if capture_iface is None:
             capture_iface = iface
         try:
-            bpf = f'tcp and dst host {destino_ip}'
+            # Use IPv6 BPF when appropriate
+            if is_ipv6:
+                bpf = f'ip6 and tcp and dst host {destino_ip}'
+            else:
+                bpf = f'tcp and dst host {destino_ip}'
             sniffer = AsyncSniffer(iface=capture_iface, filter=bpf, prn=_handle_capture)
             sniffer.start()
             print('Sniffer iniciado em', capture_iface)
@@ -99,6 +132,7 @@ def enviar_syn(destino_ip, destino_porta, intervalo=0, count=0, duration=0, orig
             else:
                 iface_name = getattr(iface, 'name', str(iface))
             log_entry = {'ts': ts, 'src': origem_ip or 'default', 'dst': destino_ip, 'dport': destino_porta, 'iface': iface_name}
+            log_entry['ip_version'] = 6 if is_ipv6 else 4
             log.append(log_entry)
             print(f"[{sent}] Pacote SYN enviado para {destino_ip}:{destino_porta} (iface={iface})")
 
@@ -122,6 +156,7 @@ def enviar_syn(destino_ip, destino_porta, intervalo=0, count=0, duration=0, orig
                 data = {'target': destino_ip, 'port': destino_porta, 'sent': sent, 'entries': log}
             data.setdefault('captured', {})
             data['captured']['syns'] = captured.get('syns', 0)
+            data['ip_version'] = 6 if is_ipv6 else 4
             try:
                 with open(logfile, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=2)

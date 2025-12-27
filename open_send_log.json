@@ -1,532 +1,423 @@
 {
-  "target": "192.168.0.249",
-  "port": 1467,
-  "sent": 75,
+  "target": "fe80::4af3:2576:9a16:feef%13",
+  "port": 135,
+  "sent": 52,
   "entries": [
     {
-      "ts": 1766442813.8066123,
+      "ts": 1766804530.1759434,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442814.8084857,
+      "ts": 1766804531.7062764,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442815.8106823,
+      "ts": 1766804533.2424862,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442816.812737,
+      "ts": 1766804534.7699614,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442817.815633,
+      "ts": 1766804536.3062465,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442818.81796,
+      "ts": 1766804537.8384256,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442819.819906,
+      "ts": 1766804539.362405,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442820.822582,
+      "ts": 1766804540.8990874,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442821.8251688,
+      "ts": 1766804542.438726,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442822.8275537,
+      "ts": 1766804543.9789476,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442823.830494,
+      "ts": 1766804545.5070202,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442824.832394,
+      "ts": 1766804547.043224,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442825.833855,
+      "ts": 1766804548.583388,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442826.8354585,
+      "ts": 1766804550.1193495,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442827.8381238,
+      "ts": 1766804551.655818,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442828.8401551,
+      "ts": 1766804553.1919603,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442829.84315,
+      "ts": 1766804554.727806,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442830.8455853,
+      "ts": 1766804556.2595015,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442831.8471904,
+      "ts": 1766804557.7835867,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442832.8498461,
+      "ts": 1766804559.3080165,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442833.8511796,
+      "ts": 1766804560.84838,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442834.8528147,
+      "ts": 1766804562.383912,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442835.8551762,
+      "ts": 1766804563.9204834,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442836.8567214,
+      "ts": 1766804565.4483967,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442837.8581245,
+      "ts": 1766804566.9887035,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442838.8602629,
+      "ts": 1766804568.5248957,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442839.862237,
+      "ts": 1766804570.048417,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442840.8646524,
+      "ts": 1766804571.5764952,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442841.8673801,
+      "ts": 1766804573.101136,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442842.8699543,
+      "ts": 1766804574.6290033,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442843.8723817,
+      "ts": 1766804576.168568,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442844.8749762,
+      "ts": 1766804577.704945,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442845.8766732,
+      "ts": 1766804579.2448366,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442846.8790433,
+      "ts": 1766804580.7728996,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442847.8806767,
+      "ts": 1766804582.301134,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442848.882543,
+      "ts": 1766804583.8406646,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442849.884587,
+      "ts": 1766804585.3773067,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442850.887275,
+      "ts": 1766804586.9091017,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442851.8893304,
+      "ts": 1766804588.4453127,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442852.8915112,
+      "ts": 1766804589.985561,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442853.8936255,
+      "ts": 1766804591.5097659,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442854.896053,
+      "ts": 1766804593.0341907,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442855.8981044,
+      "ts": 1766804594.5694652,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442856.8997824,
+      "ts": 1766804596.0933878,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442857.9015996,
+      "ts": 1766804597.6297612,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442858.9038267,
+      "ts": 1766804599.1698003,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442859.9053366,
+      "ts": 1766804600.7098107,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442860.9077322,
+      "ts": 1766804602.2463937,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442861.9103293,
+      "ts": 1766804603.7784162,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442862.9125075,
+      "ts": 1766804605.306527,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442863.9152818,
+      "ts": 1766804606.842279,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     },
     {
-      "ts": 1766442864.9186964,
+      "ts": 1766804608.3699942,
       "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442865.9218788,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442866.92367,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442867.926326,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442868.92858,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442869.9308083,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442870.9328837,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442871.9356298,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442872.9384902,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442873.9415238,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442874.9436178,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442875.9458454,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442876.9487748,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442877.950763,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442878.9530187,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442879.9559834,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442880.9588027,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442881.960809,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442882.9631932,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442883.9659252,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442884.9676409,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442885.9694374,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442886.9716294,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
-    },
-    {
-      "ts": 1766442887.973877,
-      "src": "default",
-      "dst": "192.168.0.249",
-      "dport": 1467,
-      "iface": "ZeroTier One [d3ecf5726dc782b1]"
+      "dst": "fe80::4af3:2576:9a16:feef%13",
+      "dport": 135,
+      "iface": "ZeroTier One [d3ecf5726dc782b1]",
+      "ip_version": 6
     }
   ]
 }

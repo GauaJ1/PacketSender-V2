@@ -14,6 +14,23 @@ Arquivos principais
 - `open_ports.json`: pode ser gerado por `scan_ports.py` com a opção `--save` (resultados do scan).
 
 Pré-requisitos
+````markdown
+PacketSend v1
+=============
+
+Visão geral
+----------
+Conjunto de scripts para enviar pacotes SYN, verificar capturas e escanear portas em redes de teste.
+
+Arquivos principais
+- `PacketSend.py`: envia pacotes SYN (modo interativo). Salva log JSON (padrão `open_send_log.json`). Pode iniciar captura automática (AsyncSniffer) e incluir `captured.syns` no log. Requer Npcap + execução como Administrador para envio/injeção L2.
+- `verify_capture.py`: captura e conta SYNs observados em uma interface; pode rodar em modo interativo ou por CLI. Requer Npcap + privilégios elevados.
+- `scan_ports.py`: scanner TCP concorrente (connect scan) e opção `--syn` para SYN scan via Scapy (requer Npcap/Admin). Possui modo interativo quando executado sem argumentos.
+- `scan_ports.py`: scanner TCP concorrente (connect scan) e opções `--syn` para SYN scan via Scapy (requer Npcap/Admin) e `--mac` para obter endereço MAC via ARP (rede local). Possui modo interativo quando executado sem argumentos.
+- `open_send_log.json`: gerado por `PacketSend.py` (registro dos envios e quantidade capturada).
+- `open_ports.json`: pode ser gerado por `scan_ports.py` com a opção `--save` (resultados do scan).
+
+Pré-requisitos
 - Python 3.8+ (virtualenv recomendado)
 - Dependências do Python: `scapy` (instale no seu venv: `pip install scapy`) — necessário para `PacketSend.py`, `verify_capture.py` e `--syn` em `scan_ports.py`.
 - Npcap (Windows) para captura/injeção em layer 2. Ao instalar, marque a opção "WinPcap API-compatible Mode" se houver necessidade de compatibilidade.
@@ -98,3 +115,37 @@ Próximos passos sugeridos
 
 ---
 Se quiser que eu adicione a opção CLI no `PacketSend.py` agora, diga "Adicionar CLI" e eu implemento. Caso contrário, posso criar exemplos passo-a-passo ou incorporar validação extra.
+
+## Alterações e explicações (detalhado)
+
+Resumo das alterações recentes e como cada recurso funciona — útil para testar e entender o comportamento.
+
+- `PacketSend.py` (Suporte IPv6)
+  - O que foi feito: o script agora resolve o destino antes de construir o pacote e seleciona `IPv6()` ou `IP()` conforme a família do endereço. Os logs incluem `ip_version` em cada entrada/arquivo JSON.
+  - Como funciona: ao receber um hostname ou IP, o script usa `socket.getaddrinfo()` para obter o endereço resolvido e a família (IPv4/IPv6). Em IPv6 ele constrói pacotes com `IPv6(dst=...) / TCP(...)` e os envia com `send()` (L3) ou `sendp()` (L2) quando uma interface L2 é pedida.
+  - Teste rápido: execute `python PacketSend.py` e informe um endereço IPv6 local ou hostname que resolva para IPv6; abra o JSON de log e verifique `ip_version`.
+
+- `scan_ports.py` (IPv6 + `--mac`)
+  - O que foi feito: resolução com `getaddrinfo()` para suportar IPv4/IPv6; `scan_port()` é consciente da família (AF_INET/AF_INET6) e o SYN scan usa `IPv6()` quando aplicável. Adicionada a opção `--mac` para tentar obter o endereço link-layer via ARP (IPv4).
+  - Como funciona: para IPv6 o scanner cria sockets AF_INET6 para connect-scan e usa pacotes Scapy `IPv6()/TCP()` para SYN scan. `--mac` faz um ping curto e consulta a tabela ARP/local neighbor — válido apenas para IPv4 (o script avisa se você usar `--mac` com um alvo IPv6).
+  - Teste rápido (IPv6 SYN scan — precisa Scapy + privilégios):
+    - `python scan_ports.py 2001:db8::1 --start 22 --end 25 --syn --workers 50 --save results_ipv6.json`
+
+- `verify_capture.py` (IPv6, `--mac`, `--ping-only`)
+  - O que foi feito: o script resolve o destino para um IP canônico (`resolved_dest`) e aceita IPv6 em capture e filtro BPF (`ip6 and tcp ...`). Adicionados `--mac` (tenta ARP ou NDP/neighbor lookup) e `--ping-only` (executa ping(s) sem precisar de interface).
+  - Como funciona:
+    - Captura: o filtro BPF usa `ip6` quando apropriado; o handler confirma `TCP` e a condição SYN sem ACK, e compara o `dst` do pacote com o IP resolvido.
+    - `--mac`: em IPv4 faz `ping` e consulta `arp -a`/`ip neigh`; em IPv6 faz `ping` e consulta `ip -6 neigh` ou `netsh interface ipv6 show neighbors` (Windows). Depende da cache local e só funciona para hosts na mesma sub-rede.
+    - `--ping-only`: executa `ping` adequadamente (Windows/Unix) — útil quando não há interface de captura disponível.
+  - Testes rápidos:
+    - `python verify_capture.py --dest 192.168.1.10 --ping-only --ping-count 3`
+    - `python verify_capture.py --dest 2001:db8::1 --ping-only --ping-count 2`
+    - `python verify_capture.py --dest 192.168.1.10 --iface "\\Device\\NPF_{...}" --timeout 10 --mac`
+
+Observações e limitações
+- `--mac`/NDP: só confiável na mesma sub-rede/link; NDP/neighbor lookup varia por SO e saída pode depender do idioma do sistema.
+- Privilégios: captura com Scapy/AsyncSniffer e SYN scans requerem drivers/privilégios (Npcap + execução como Administrador no Windows).
+- Segurança/uso: execute apenas em redes/hosts autorizados.
+
+Quer que eu adicione uma seção separada "Comandos por SO" com exemplos específicos para Windows e Linux? 
+````

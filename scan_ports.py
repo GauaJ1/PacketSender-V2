@@ -26,11 +26,19 @@ import platform
 import re
 
 
-def scan_port(host, port, timeout):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def scan_port(host, port, timeout, family=socket.AF_INET):
+    # Create socket for the appropriate address family
+    try:
+        s = socket.socket(family, socket.SOCK_STREAM)
+    except Exception:
+        return port, 'error'
     s.settimeout(timeout)
     try:
-        s.connect((host, port))
+        if family == socket.AF_INET6:
+            addr = (host, port, 0, 0)
+        else:
+            addr = (host, port)
+        s.connect(addr)
         s.close()
         return port, 'open'
     except ConnectionRefusedError:
@@ -115,24 +123,30 @@ def main():
     else:
         args = parser.parse_args()
 
+    # Resolve target to support IPv4 and IPv6
     try:
-        target_ip = socket.gethostbyname(args.target)
+        addrinfos = socket.getaddrinfo(args.target, None)
+        family = addrinfos[0][0]
+        target_ip = addrinfos[0][4][0]
     except Exception as e:
         print('Falha ao resolver host:', e)
         return
 
     mac_addr = None
     if getattr(args, 'mac', False):
-        mac_addr = get_mac_for_ip(target_ip, args.timeout)
-        if mac_addr:
-            print(f'MAC: {mac_addr}')
+        if family == socket.AF_INET6:
+            print('MAC via ARP não aplicável a IPv6; pulando lookup de MAC para IPv6.')
         else:
-            print('MAC não encontrado (pode estar fora da rede local ou bloqueado).')
+            mac_addr = get_mac_for_ip(target_ip, args.timeout)
+            if mac_addr:
+                print(f'MAC: {mac_addr}')
+            else:
+                print('MAC não encontrado (pode estar fora da rede local ou bloqueado).')
 
     # If SYN scan requested, use Scapy-based scan
     if getattr(args, 'syn', False):
         try:
-            from scapy.all import conf, sr1, IP, TCP, send
+            from scapy.all import conf, sr1, IP, IPv6, TCP, send
         except Exception as e:
             print('Scapy não disponível: instale scapy e Npcap (e rode como Administrador).', e)
             return
@@ -146,14 +160,20 @@ def main():
 
         def syn_scan_port(host, port, timeout):
             sport = random.randint(1025, 65535)
-            pkt = IP(dst=host)/TCP(dport=port, flags='S', sport=sport)
+            if family == socket.AF_INET6:
+                pkt = IPv6(dst=host)/TCP(dport=port, flags='S', sport=sport)
+            else:
+                pkt = IP(dst=host)/TCP(dport=port, flags='S', sport=sport)
             resp = sr1(pkt, timeout=timeout, verbose=0)
             if resp is None:
                 return port, 'no-response'
             if resp.haslayer(TCP):
                 rflags = resp[TCP].flags
                 if rflags & 0x12:  # SYN-ACK
-                    rst = IP(dst=host)/TCP(dport=port, flags='R', sport=sport)
+                    if family == socket.AF_INET6:
+                        rst = IPv6(dst=host)/TCP(dport=port, flags='R', sport=sport)
+                    else:
+                        rst = IP(dst=host)/TCP(dport=port, flags='R', sport=sport)
                     send(rst, verbose=0)
                     return port, 'open'
                 elif rflags & 0x14:  # RST-ACK
@@ -193,7 +213,8 @@ def main():
                 'results': results,
                 'elapsed': elapsed,
                 'method': 'syn',
-                'mac': mac_addr
+                'mac': mac_addr,
+                'ip_version': 6 if family == socket.AF_INET6 else 4
             }
             with open(args.save, 'w', encoding='utf-8') as f:
                 json.dump(out, f, indent=2)
@@ -208,7 +229,7 @@ def main():
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        future_to_port = {executor.submit(scan_port, target_ip, p, args.timeout): p for p in ports}
+        future_to_port = {executor.submit(scan_port, target_ip, p, args.timeout if args.timeout else 0.5, family): p for p in ports}
         # Optional small pacing
         if args.rate > 0:
             time.sleep(args.rate)
