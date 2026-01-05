@@ -26,6 +26,26 @@ import platform
 import re
 
 
+def get_service_name(port):
+    """Tenta obter o nome do serviço para uma porta TCP.
+    Usa `socket.getservbyport` se disponível, senão usa um mapeamento simples.
+    """
+    try:
+        name = socket.getservbyport(port, 'tcp')
+        if name:
+            return name
+    except Exception:
+        pass
+
+    common = {
+        21: 'ftp', 22: 'ssh', 23: 'telnet', 25: 'smtp', 53: 'domain',
+        67: 'dhcp', 68: 'dhcp', 80: 'http', 111: 'rpcbind', 135: 'msrpc',
+        139: 'netbios-ssn', 443: 'https', 445: 'microsoft-ds', 631: 'ipp',
+        1433: 'ms-sql-s', 1521: 'oracle', 2049: 'nfs', 3306: 'mysql', 3000: 'http-alt'
+    }
+    return common.get(port, 'unknown')
+
+
 def scan_port(host, port, timeout, family=socket.AF_INET):
     # Create socket for the appropriate address family
     try:
@@ -192,25 +212,33 @@ def main():
                 port = future_to_port[future]
                 try:
                     p, status = future.result()
-                    results[p] = status
+                    service = get_service_name(p)
+                    results[p] = {'state': status, 'service': service}
                     if status == 'open':
                         open_ports.append(p)
-                        print(f'Open: {p}')
+                        print(f'Open: {p} ({service})')
                 except Exception:
-                    results[port] = 'error'
+                    results[port] = {'state': 'error', 'service': None}
 
         elapsed = time.time() - start_time
         print('\nSYN scan completo em {:.2f}s'.format(elapsed))
         print('Portas abertas:', sorted(open_ports))
 
         if args.save:
+            # Save simplified results mapping (port -> state) to keep JSON compact
+            simple_results = {p: (results[p]['state'] if isinstance(results[p], dict) else results[p]) for p in results}
+            # Only store services for open ports to keep the JSON focused
+            services_map = {p: (results[p]['service'] if isinstance(results[p], dict) else get_service_name(p)) for p in sorted(open_ports)}
+            # Build detailed open_ports list of objects {port, service}
+            open_ports_detailed = [{'port': p, 'service': services_map.get(p, get_service_name(p))} for p in sorted(open_ports)]
             out = {
                 'target': args.target,
                 'target_ip': target_ip,
                 'start': args.start,
                 'end': args.end,
-                'open_ports': sorted(open_ports),
-                'results': results,
+                'open_ports': open_ports_detailed,
+                'results': simple_results,
+                'services': services_map,
                 'elapsed': elapsed,
                 'method': 'syn',
                 'mac': mac_addr,
@@ -237,26 +265,49 @@ def main():
         for future in as_completed(future_to_port):
             port = future_to_port[future]
             try:
-                p, status = future.result()
-                results[p] = status
-                if status == 'open':
-                    open_ports.append(p)
-                    print(f'Open: {p}')
+                    p, status = future.result()
+                    service = get_service_name(p)
+                    results[p] = {'state': status, 'service': service}
+                    if status == 'open':
+                        open_ports.append(p)
+                        print(f'Open: {p} ({service})')
             except Exception as exc:
-                results[port] = 'error'
+                    results[port] = {'state': 'error', 'service': None}
 
     elapsed = time.time() - start_time
     print('\nScan completo em {:.2f}s'.format(elapsed))
     print('Portas abertas:', sorted(open_ports))
 
+    # Print table similar to nmap: aligned columns PORT  STATE  SERVICE
+    rows = []
+    for p in sorted(results.keys()):
+        info = results[p]
+        state = info['state'] if isinstance(info, dict) else info
+        service = info['service'] if isinstance(info, dict) else get_service_name(p)
+        rows.append((f"{p}/tcp", state, service))
+
+    port_w = max([len(r[0]) for r in rows] + [4])
+    state_w = max([len(r[1]) for r in rows] + [5])
+    service_w = max([len(r[2]) for r in rows] + [7])
+
+    print()
+    print(f"{ 'PORT'.ljust(port_w) }  { 'STATE'.ljust(state_w) }  { 'SERVICE'.ljust(service_w) }")
+    for port_str, state, service in rows:
+        print(f"{port_str.ljust(port_w)}  {state.ljust(state_w)}  {service.ljust(service_w)}")
+
     if args.save:
+        simple_results = {p: (results[p]['state'] if isinstance(results[p], dict) else results[p]) for p in results}
+        services_map = {p: (results[p]['service'] if isinstance(results[p], dict) else get_service_name(p)) for p in sorted(open_ports)}
+        # Build detailed open_ports list of objects {port, service}
+        open_ports_detailed = [{'port': p, 'service': services_map.get(p, get_service_name(p))} for p in sorted(open_ports)]
         out = {
             'target': args.target,
             'target_ip': target_ip,
             'start': args.start,
             'end': args.end,
-            'open_ports': sorted(open_ports),
-            'results': results,
+            'open_ports': open_ports_detailed,
+            'results': simple_results,
+            'services': services_map,
             'elapsed': elapsed,
             'mac': mac_addr
         }

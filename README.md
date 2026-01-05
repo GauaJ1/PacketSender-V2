@@ -128,6 +128,21 @@ Resumo das alterações recentes e como cada recurso funciona — útil para tes
 - `scan_ports.py` (IPv6 + `--mac`)
   - O que foi feito: resolução com `getaddrinfo()` para suportar IPv4/IPv6; `scan_port()` é consciente da família (AF_INET/AF_INET6) e o SYN scan usa `IPv6()` quando aplicável. Adicionada a opção `--mac` para tentar obter o endereço link-layer via ARP (IPv4).
   - Como funciona: para IPv6 o scanner cria sockets AF_INET6 para connect-scan e usa pacotes Scapy `IPv6()/TCP()` para SYN scan. `--mac` faz um ping curto e consulta a tabela ARP/local neighbor — válido apenas para IPv4 (o script avisa se você usar `--mac` com um alvo IPv6).
+  - Saída JSON (`--save`): ao usar `--save` o script grava um JSON com metadados do scan. O campo `open_ports` agora é uma lista de objetos detalhados no formato `[{"port": <porta>, "service": "<nome>"}, ...]`. O arquivo também inclui um mapeamento `results` (porta -> estado), `services` (serviços para portas abertas), e campos auxiliares como `mac` (se `--mac` foi usado), `ip_version` (4 ou 6) e `method` (por exemplo, `"syn"` para SYN scan).
+
+    Exemplo de saída (trecho):
+
+    ```json
+    {
+      "target": "192.168.1.10",
+      "open_ports": [{"port": 22, "service": "ssh"}, {"port": 80, "service": "http"}],
+      "results": {"22": "open", "80": "open", "23": "closed"},
+      "services": {"22": "ssh", "80": "http"},
+      "mac": "01:23:45:67:89:ab",
+      "ip_version": 4,
+      "method": "syn"
+    }
+    ```
   - Teste rápido (IPv6 SYN scan — precisa Scapy + privilégios):
     - `python scan_ports.py 2001:db8::1 --start 22 --end 25 --syn --workers 50 --save results_ipv6.json`
 
