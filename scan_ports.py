@@ -26,6 +26,32 @@ import platform
 import re
 
 
+class TokenBucket:
+    """Simple token bucket for rate limiting (tokens per second).
+    Call `consume()` before performing an action to ensure rate limit.
+    """
+    def __init__(self, rate, capacity=1):
+        self.rate = float(rate)
+        self.capacity = float(max(1, capacity))
+        self._tokens = float(self.capacity)
+        self._last = time.monotonic()
+
+    def consume(self, tokens=1):
+        tokens = float(tokens)
+        while True:
+            now = time.monotonic()
+            elapsed = now - self._last
+            # refill
+            self._tokens = min(self.capacity, self._tokens + elapsed * self.rate)
+            self._last = now
+            if self._tokens >= tokens:
+                self._tokens -= tokens
+                return True
+            # sleep a tiny bit to wait for tokens
+            to_wait = (tokens - self._tokens) / max(self.rate, 1e-6)
+            time.sleep(min(0.1, max(0.001, to_wait)))
+
+
 def get_service_name(port):
     """Tenta obter o nome do serviço para uma porta TCP.
     Usa `socket.getservbyport` se disponível, senão usa um mapeamento simples.
@@ -67,6 +93,21 @@ def scan_port(host, port, timeout, family=socket.AF_INET):
         return port, 'filtered'
     except Exception:
         return port, 'error'
+
+
+def scan_port_with_retries(host, port, timeout, family=socket.AF_INET, max_retries=0, backoff=0.5):
+    """Wrapper around scan_port that retries on non-open results with exponential backoff.
+    `max_retries` is the number of additional attempts (0 = no retry).
+    """
+    attempts = max(1, int(max_retries) + 1)
+    for attempt in range(attempts):
+        p, status = scan_port(host, port, timeout, family)
+        if status == 'open' or attempt == attempts - 1:
+            return p, status
+        # Exponential backoff with slight jitter
+        wait = backoff * (2 ** attempt) * (0.8 + random.random() * 0.4)
+        time.sleep(min(wait, 5))
+    return port, 'error'
 
 
 def get_mac_for_ip(ip, timeout=0.5):
@@ -124,6 +165,9 @@ def main():
     parser.add_argument('--workers', '-w', type=int, default=200, help='Número de threads concorrentes')
     parser.add_argument('--save', help='Salvar resultado em JSON')
     parser.add_argument('--rate', type=float, default=0.0, help='Delay (s) entre submissões de tarefas para reduzir carga (default 0)')
+    parser.add_argument('--rate-limit', type=float, default=0.0, help='Máximo de tentativas por segundo (0 = sem limite)')
+    parser.add_argument('--max-retries', type=int, default=0, help='Número máximo de tentativas adicionais para portas não abertas (default 0)')
+    parser.add_argument('--retry-backoff', type=float, default=0.5, help='Backoff base em segundos entre tentativas (exponencial)')
     parser.add_argument('--syn', action='store_true', help='Usar SYN scan com Scapy (requer Npcap/Admin)')
     parser.add_argument('--mac', action='store_true', help='Obter endereço MAC do alvo usando ARP (rede local)')
     # Modo interativo quando nenhum argumento é passado
@@ -203,10 +247,16 @@ def main():
         print(f'Scanning (SYN) {args.target} ({target_ip}) ports {args.start}-{args.end} with {args.workers} workers')
         start_time = time.time()
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            future_to_port = {executor.submit(syn_scan_port, target_ip, p, args.timeout): p for p in ports}
-            # Optional small pacing
-            if args.rate > 0:
-                time.sleep(args.rate)
+            future_to_port = {}
+            tb = TokenBucket(args.rate_limit, capacity=max(1, args.workers)) if args.rate_limit and args.rate_limit > 0 else None
+            for p in ports:
+                if tb:
+                    tb.consume()
+                future = executor.submit(syn_scan_port, target_ip, p, args.timeout)
+                future_to_port[future] = p
+                # Optional small pacing
+                if args.rate > 0:
+                    time.sleep(args.rate)
 
             for future in as_completed(future_to_port):
                 port = future_to_port[future]
@@ -257,10 +307,16 @@ def main():
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        future_to_port = {executor.submit(scan_port, target_ip, p, args.timeout if args.timeout else 0.5, family): p for p in ports}
-        # Optional small pacing
-        if args.rate > 0:
-            time.sleep(args.rate)
+        future_to_port = {}
+        tb = TokenBucket(args.rate_limit, capacity=max(1, args.workers)) if args.rate_limit and args.rate_limit > 0 else None
+        for p in ports:
+            if tb:
+                tb.consume()
+            future = executor.submit(scan_port_with_retries, target_ip, p, args.timeout if args.timeout else 0.5, family, args.max_retries, args.retry_backoff)
+            future_to_port[future] = p
+            # Optional small pacing
+            if args.rate > 0:
+                time.sleep(args.rate)
 
         for future in as_completed(future_to_port):
             port = future_to_port[future]
