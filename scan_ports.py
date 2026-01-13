@@ -25,6 +25,23 @@ import subprocess
 import platform
 import re
 
+# Optional color support
+try:
+    from colorama import init as _col_init
+    from colorama import Fore, Style
+    _col_init(autoreset=True)
+    COLOR_AVAILABLE = True
+except Exception:
+    COLOR_AVAILABLE = False
+    class Fore:
+        GREEN = ''
+        RED = ''
+        YELLOW = ''
+        CYAN = ''
+    class Style:
+        BRIGHT = ''
+        RESET_ALL = ''
+
 
 class TokenBucket:
     """Simple token bucket for rate limiting (tokens per second).
@@ -170,6 +187,10 @@ def main():
     parser.add_argument('--retry-backoff', type=float, default=0.5, help='Backoff base em segundos entre tentativas (exponencial)')
     parser.add_argument('--syn', action='store_true', help='Usar SYN scan com Scapy (requer Npcap/Admin)')
     parser.add_argument('--mac', action='store_true', help='Obter endereço MAC do alvo usando ARP (rede local)')
+    grp = parser.add_mutually_exclusive_group()
+    grp.add_argument('--pretty', dest='pretty', action='store_true', help='Mostrar saída formatada/colorida')
+    grp.add_argument('--no-pretty', dest='pretty', action='store_false', help='Desabilitar saída formatada')
+    parser.set_defaults(pretty=True)
     # Modo interativo quando nenhum argumento é passado
     if len(sys.argv) == 1:
         print('Modo interativo: insira os valores solicitados (Enter = padrão)')
@@ -342,14 +363,40 @@ def main():
         service = info['service'] if isinstance(info, dict) else get_service_name(p)
         rows.append((f"{p}/tcp", state, service))
 
-    port_w = max([len(r[0]) for r in rows] + [4])
-    state_w = max([len(r[1]) for r in rows] + [5])
-    service_w = max([len(r[2]) for r in rows] + [7])
+    def print_pretty(rows, elapsed, target):
+        total = len(rows)
+        open_count = sum(1 for r in rows if r[1] == 'open')
+        title = f" Scan results for {target} — {open_count}/{total} open (elapsed {elapsed:.2f}s) "
+        sep = '=' * max(60, len(title) + 4)
+        print(Fore.CYAN + Style.BRIGHT + sep)
+        print(Fore.CYAN + Style.BRIGHT + title.center(len(sep)))
+        print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
 
-    print()
-    print(f"{ 'PORT'.ljust(port_w) }  { 'STATE'.ljust(state_w) }  { 'SERVICE'.ljust(service_w) }")
-    for port_str, state, service in rows:
-        print(f"{port_str.ljust(port_w)}  {state.ljust(state_w)}  {service.ljust(service_w)}")
+        port_w = max([len(r[0]) for r in rows] + [4])
+        state_w = max([len(r[1]) for r in rows] + [5])
+        service_w = max([len(r[2]) for r in rows] + [7])
+
+        header = f"| {'PORT'.ljust(port_w)} | {'STATE'.ljust(state_w)} | {'SERVICE'.ljust(service_w)} |"
+        print(Fore.CYAN + header)
+        print(Fore.CYAN + '-' * len(header) + Style.RESET_ALL)
+        for port_str, state, service in rows:
+            color = Fore.GREEN if state == 'open' else (Fore.YELLOW if state in ('filtered', 'no-response') else Fore.RED)
+            state_txt = state.upper() if isinstance(state, str) else str(state)
+            print(f"| {port_str.ljust(port_w)} | {color}{state_txt.ljust(state_w)}{Style.RESET_ALL} | {service.ljust(service_w)} |")
+
+        print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
+
+    if getattr(args, 'pretty', False):
+        print_pretty(rows, elapsed, args.target)
+    else:
+        port_w = max([len(r[0]) for r in rows] + [4])
+        state_w = max([len(r[1]) for r in rows] + [5])
+        service_w = max([len(r[2]) for r in rows] + [7])
+
+        print()
+        print(f"{ 'PORT'.ljust(port_w) }  { 'STATE'.ljust(state_w) }  { 'SERVICE'.ljust(service_w) }")
+        for port_str, state, service in rows:
+            print(f"{port_str.ljust(port_w)}  {state.ljust(state_w)}  {service.ljust(service_w)}")
 
     if args.save:
         simple_results = {p: (results[p]['state'] if isinstance(results[p], dict) else results[p]) for p in results}

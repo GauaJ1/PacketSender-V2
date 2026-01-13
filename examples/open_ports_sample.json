@@ -1,0 +1,16 @@
+{
+  "target": "192.168.1.10",
+  "target_ip": "192.168.1.10",
+  "start": 1,
+  "end": 1024,
+  "open_ports": [
+    { "port": 22, "service": "ssh" },
+    { "port": 80, "service": "http" }
+  ],
+  "results": { "22": "open", "80": "open", "23": "closed" },
+  "services": { "22": "ssh", "80": "http" },
+  "mac": null,
+  "ip_version": 4,
+  "method": "connect",
+  "elapsed": 2.34
+}

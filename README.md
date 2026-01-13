@@ -1,162 +1,116 @@
-PacketSend v1
-=============
+Aqui está a versão atualizada, reestruturada para melhor legibilidade e estilo, formatada inteiramente em Markdown dentro do bloco de código, conforme solicitado.
 
-Visão geral
-----------
-Conjunto de scripts para enviar pacotes SYN, verificar capturas e escanear portas em redes de teste.
+```markdown
+# 📦 PacketSend v1
 
-Arquivos principais
-- `PacketSend.py`: envia pacotes SYN (modo interativo). Salva log JSON (padrão `open_send_log.json`). Pode iniciar captura automática (AsyncSniffer) e incluir `captured.syns` no log. Requer Npcap + execução como Administrador para envio/injeção L2.
-- `verify_capture.py`: captura e conta SYNs observados em uma interface; pode rodar em modo interativo ou por CLI. Requer Npcap + privilégios elevados.
-- `scan_ports.py`: scanner TCP concorrente (connect scan) e opção `--syn` para SYN scan via Scapy (requer Npcap/Admin). Possui modo interativo quando executado sem argumentos.
-- `scan_ports.py`: scanner TCP concorrente (connect scan) e opções `--syn` para SYN scan via Scapy (requer Npcap/Admin) e `--mac` para obter endereço MAC via ARP (rede local). Possui modo interativo quando executado sem argumentos.
-- `open_send_log.json`: gerado por `PacketSend.py` (registro dos envios e quantidade capturada).
-- `open_ports.json`: pode ser gerado por `scan_ports.py` com a opção `--save` (resultados do scan).
+**PacketSend** é um conjunto de scripts em Python para testes de redes e análise: envio de SYNs, verificação de capturas e escaneamento de portas. O objetivo é oferecer ferramentas simples, seguras (quando usadas em redes autorizadas) e fáceis de auditar.
 
-Pré-requisitos
-````markdown
-PacketSend v1
-=============
-
-Visão geral
-----------
-Conjunto de scripts para enviar pacotes SYN, verificar capturas e escanear portas em redes de teste.
-
-Arquivos principais
-- `PacketSend.py`: envia pacotes SYN (modo interativo). Salva log JSON (padrão `open_send_log.json`). Pode iniciar captura automática (AsyncSniffer) e incluir `captured.syns` no log. Requer Npcap + execução como Administrador para envio/injeção L2.
-- `verify_capture.py`: captura e conta SYNs observados em uma interface; pode rodar em modo interativo ou por CLI. Requer Npcap + privilégios elevados.
-- `scan_ports.py`: scanner TCP concorrente (connect scan) e opção `--syn` para SYN scan via Scapy (requer Npcap/Admin). Possui modo interativo quando executado sem argumentos.
-- `scan_ports.py`: scanner TCP concorrente (connect scan) e opções `--syn` para SYN scan via Scapy (requer Npcap/Admin) e `--mac` para obter endereço MAC via ARP (rede local). Possui modo interativo quando executado sem argumentos.
-- `open_send_log.json`: gerado por `PacketSend.py` (registro dos envios e quantidade capturada).
-- `open_ports.json`: pode ser gerado por `scan_ports.py` com a opção `--save` (resultados do scan).
-
-Pré-requisitos
-- Python 3.8+ (virtualenv recomendado)
-- Dependências do Python: `scapy` (instale no seu venv: `pip install scapy`) — necessário para `PacketSend.py`, `verify_capture.py` e `--syn` em `scan_ports.py`.
-- Npcap (Windows) para captura/injeção em layer 2. Ao instalar, marque a opção "WinPcap API-compatible Mode" se houver necessidade de compatibilidade.
-- Executar o terminal/VSCode como Administrador para injeção/captura L2.
-- (Opcional) Wireshark/tshark para inspeção: `tshark` fica disponível quando instalar Wireshark.
-
-Como instalar Npcap (resumo)
-```powershell
-# usar o instalador oficial do Npcap (baixar do site oficial)
-# ou instalar Wireshark via winget (inclui Npcap) e selecione compatibilidade WinPcap durante a instalação
-winget install --id WiresharkFoundation.Wireshark -e --accept-source-agreements --accept-package-agreements
-```
-
-Executando os scripts (exemplos)
-
-1) `PacketSend.py` (modo interativo)
-```powershell
-cd 'C:\Users\Usuario\Pictures\PacketSend v1'
-& '.\.venv\Scripts\Activate.ps1'   # se estiver usando venv
-python PacketSend.py
-# Responda os prompts: IP, porta, taxa/intervalo, quantidade, duração, iface e nome do log
-```
-- Dica: para um teste rápido escolha `count=10` e `rate=1` (1 pps). Rode `verify_capture.py` ou Wireshark simultaneamente para confirmar a captura.
-# PacketSend v1
-
-Uma coleção pequena de scripts para testes de rede: envio de SYNs, verificação de capturas e scanner de portas.
+Esta documentação foi organizada para ser direta e explicativa — cada seção contém instruções passo a passo e exemplos que você pode copiar.
 
 ---
 
-## Visão rápida
+## ✨ Funcionalidades principais (resumo)
 
-- `PacketSend.py` — envio de SYNs e logging (JSON).
-- `verify_capture.py` — captura/validação de SYNs (possui `--ping-only`).
-- `scan_ports.py` — scanner TCP concorrente (connect scan) com opção `--syn` (Scapy). Suporta IPv4/IPv6, ARP/NDP (`--mac`), rate limiting e retries.
-- `tests/` — testes unitários com `pytest`.
-
-## O que há de novo
-
-- Suporte a IPv6 (detecção automática).
-- `--mac`: lookup ARP/NDP para obter MAC local (quando aplicável).
-- Rate limiting: `--rate` e `--rate-limit` (token-bucket).
-- Retries: `--max-retries` e `--retry-backoff` (backoff exponencial + jitter).
-- Saída JSON: `open_ports` agora é lista de objetos `{port, service}`.
+- `scan_ports.py`: scanner TCP concorrente com suporte a IPv4/IPv6, SYN-scan opcional via Scapy, lookup de MAC (`--mac`), controle de taxa e retries.
+- `PacketSend.py`: utilitário interativo para enviar pacotes SYN e gravar logs JSON.
+- `verify_capture.py`: valida capturas (conta SYNs recebidos) e pode rodar em modo `--ping-only`.
 
 ---
 
-## Instalação
+## 🔧 Pré-requisitos e instalação rápida
 
-Recomendo usar um ambiente virtual:
+1. Instale Python 3.8+.
+2. Crie e ative um ambiente virtual (recomendado):
 
 ```powershell
 python -m venv .venv
 & .\.venv\Scripts\Activate.ps1
+```
+
+3. Instale dependências necessárias (ex.: para usar Scapy ou saída colorida):
+
+```powershell
 pip install -r requirements.txt
 ```
 
-No Windows instale Npcap/Wireshark se for usar captura/injeção L2 ou Scapy.
+Observações:
+- No Windows, instale Npcap se pretende usar captura/injeção em layer 2 ou SYN scan com Scapy.
+- Execute scripts que injetam pacotes (SYN/injeção L2) com privilégios de Administrador/Root.
 
 ---
 
-## Exemplos úteis
+## 🧭 Guia de uso — exemplos práticos
 
-Scan connect rápido:
-
-```powershell
-python scan_ports.py 192.168.1.10 --start 1 --end 1024 --workers 200 --timeout 0.5 --save open_ports.json
-```
-
-Com rate-limit e retries:
+1) Scan rápido (connect scan):
 
 ```powershell
-python scan_ports.py 192.168.1.10 --start 1 --end 1024 --workers 200 --rate-limit 50 --max-retries 2 --retry-backoff 0.5 --save open_ports.json
+python scan_ports.py 192.168.1.10 --start 1 --end 1024 --workers 200 --save resultado.json
 ```
 
-SYN scan (Scapy — Npcap/Admin):
+2) Scan com controle de taxa e tentativas (seguro para redes de produção testadas):
 
 ```powershell
-python scan_ports.py 192.168.1.10 --syn --start 1 --end 1024 --workers 200 --timeout 1.0 --save syn_results.json
+python scan_ports.py 192.168.1.10 --workers 200 --rate-limit 50 --max-retries 2 --retry-backoff 0.5 --save scan_safe.json
 ```
 
-Obter MAC local (ARP/NDP):
+3) SYN scan (stealth) — precisa Scapy e privilégios:
+
+```powershell
+python scan_ports.py 192.168.1.10 --syn --start 20 --end 80
+```
+
+4) Apenas obter MAC local (quando estiver na mesma sub-rede):
 
 ```powershell
 python scan_ports.py 192.168.1.10 --mac
 ```
 
-Rodar testes:
+5) Envio interativo de SYNs (use `PacketSend.py`):
 
 ```powershell
-python -m pytest -q
+python PacketSend.py
 ```
 
----
-
-## Opções importantes (`scan_ports.py`)
-
-- `--start` / `--end`: intervalo de portas.
-- `--workers`: número de threads para o executor.
-- `--timeout`: timeout por tentativa.
-- `--syn`: SYN scan via Scapy (requer privilégios/Npcap).
-- `--mac`: tenta obter endereço link-layer (requer alvo na mesma sub-rede).
-- `--rate`: atraso simples entre submissões.
-- `--rate-limit`: taxa máxima (tentativas/s) via token-bucket.
-- `--max-retries`: tentativas adicionais para portas não abertas.
-- `--retry-backoff`: tempo base (s) para backoff exponencial.
-- `--save <file>`: salva JSON com resultados.
+Siga os prompts para configurar IP, porta, taxa (pps) e duração.
 
 ---
 
-## Formato JSON de saída
+## 📌 Opções importantes (`scan_ports.py`)
 
-O arquivo gerado por `--save` contém metadados e os resultados. Campos principais:
+- `target` — IP ou hostname (obrigatório).
+- `--start`, `--end` — intervalo de portas.
+- `--workers` — número de threads (aumenta velocidade, exige cautela).
+- `--timeout` — timeout por tentativa (s).
+- `--syn` — ativa SYN scan (requer Scapy/Npcap e privilégios).
+- `--mac` — tenta obter endereço link-layer via ARP/NDP (apenas em mesma sub-rede).
+- `--rate` — atraso fixo (s) entre submissões de tarefas.
+- `--rate-limit` — máximo de tentativas/segundos (token-bucket).
+- `--max-retries` — número de tentativas adicionais para portas não abertas.
+- `--retry-backoff` — tempo base (s) para backoff exponencial entre tentativas.
+- `--pretty` / `--no-pretty` — saída formatada colorida (padrão: `--pretty`).
+- `--save <file>` — salva resultados em JSON.
 
-- `open_ports`: lista de objetos `{ "port": 22, "service": "ssh" }`.
-- `results`: mapa `porta -> estado` (ex.: `"22": "open"`).
-- `services`: mapa `porta -> serviço` (para portas abertas).
-- `mac`, `ip_version`, `method`, `elapsed`, entre outros.
+Dica: comece com `--workers` e `--rate-limit` baixos e aumente conforme observa os efeitos na rede.
 
-Exemplo:
+---
+
+## 📁 Formato do arquivo salvo (`--save`)
+
+O JSON contém metadados do scan e uma lista detalhada de portas abertas. Campos úteis:
+
+- `target`, `target_ip`, `start`, `end` — parâmetros do scan.
+- `open_ports` — lista de objetos `{ "port": <n>, "service": "<nome>" }`.
+- `results` — mapa `porta -> estado` (ex.: `"22": "open"`).
+- `services` — mapa `porta -> serviço` (apenas portas abertas).
+- `mac`, `ip_version`, `method`, `elapsed`.
+
+Exemplo curto:
 
 ```json
 {
   "target": "192.168.1.10",
   "open_ports": [ { "port": 22, "service": "ssh" } ],
   "results": { "22": "open" },
-  "services": { "22": "ssh" },
   "mac": null,
   "ip_version": 4,
   "method": "connect",
@@ -166,32 +120,27 @@ Exemplo:
 
 ---
 
-## Testes
+## 🧪 Testes
 
-Testes em `tests/test_scan_ports.py` cobrem:
+Testes automatizados estão em `tests/test_scan_ports.py` e cobrem partes críticas:
 
-- `get_service_name()`
-- `scan_port()` com socket simulado
-- `TokenBucket`
-- `scan_port_with_retries()` (monkeypatch)
+- `get_service_name()` — verificação de mapeamento de portas para serviços.
+- `TokenBucket` — garante comportamento do limitador de taxa.
+- `scan_port()` — testado com um socket falso para evitar conexões reais.
+- `scan_port_with_retries()` — testado com `monkeypatch` para simular falhas e sucesso.
 
-Rode `python -m pytest -q` no venv.
+Executar testes:
 
----
+```powershell
+python -m pytest -q
+```
 
-## Boas práticas
-
-- Execute somente em redes/hosts autorizados.
-- Comece com `--workers` e `--rate-limit` baixos.
-- Use `--save` para auditoria.
+Explicação simples dos testes: os testes substituem (mock/monkeypatch) partes que fazem I/O (sockets) por versões controladas. Assim validamos a lógica sem tocar a rede.
 
 ---
 
-## Próximos passos recomendados
+## ⚠️ Aviso legal
 
-- Banner grabbing (`--banner`) para identificar versões de serviços.
-- Retries também para o modo SYN (`--syn`).
-- Refatoração para `asyncio` para maior escala.
-- Workflow CI (GitHub Actions) para rodar `pytest` automaticamente.
+Use estas ferramentas apenas em redes onde você tem autorização. Testes sem permissão podem ser ilegais.
 
-Diga qual deseja que eu implemente em seguida e eu começo a tarefa.
+```
