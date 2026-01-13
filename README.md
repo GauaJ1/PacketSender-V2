@@ -1,6 +1,3 @@
-Aqui está a versão atualizada, reestruturada para melhor legibilidade e estilo, formatada inteiramente em Markdown dentro do bloco de código, conforme solicitado.
-
-```markdown
 # 📦 PacketSend v1
 
 **PacketSend** é um conjunto de scripts em Python para testes de redes e análise: envio de SYNs, verificação de capturas e escaneamento de portas. O objetivo é oferecer ferramentas simples, seguras (quando usadas em redes autorizadas) e fáceis de auditar.
