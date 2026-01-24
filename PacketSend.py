@@ -5,6 +5,23 @@ import json
 import signal
 import threading
 
+# Optional color support
+try:
+    from colorama import init as _col_init
+    from colorama import Fore, Style
+    _col_init(autoreset=True)
+    COLOR_AVAILABLE = True
+except Exception:
+    COLOR_AVAILABLE = False
+    class Fore:
+        GREEN = ''
+        RED = ''
+        YELLOW = ''
+        CYAN = ''
+    class Style:
+        BRIGHT = ''
+        RESET_ALL = ''
+
 # Force Scapy to use pcap/Npcap on Windows (requires Npcap installed)
 conf.use_pcap = True
 
@@ -166,27 +183,61 @@ def enviar_syn(destino_ip, destino_porta, intervalo=0, count=0, duration=0, orig
 
 
 if __name__ == "__main__":
-    print('Modo interativo de envio de SYNs (preencha valores)')
-    ip_destino = input("Digite o IP de destino: ").strip()
+    print('\n' + Fore.CYAN + Style.BRIGHT + '=' * 60)
+    print('  GERADOR DE PACOTES SYN - MODO INTERATIVO')
+    print('=' * 60 + Style.RESET_ALL + '\n')
+    
+    ip_destino = input(Fore.YELLOW + '→ IP de destino: ' + Style.RESET_ALL).strip()
     if not ip_destino:
-        print('IP de destino obrigatório')
+        print(Fore.RED + 'IP de destino obrigatório' + Style.RESET_ALL)
         raise SystemExit(1)
-    porta_destino = int(input("Digite a porta de destino: ").strip() or 0)
-    # Escolha entre taxa (pps) ou intervalo
-    rate = input("Taxa (pacotes por segundo) (Enter para usar intervalo): ").strip()
-    if rate:
+    
+    try:
+        porta_destino = int(input(Fore.YELLOW + '→ Porta de destino: ' + Style.RESET_ALL).strip() or 0)
+    except ValueError:
+        print(Fore.RED + 'Porta inválida' + Style.RESET_ALL)
+        raise SystemExit(1)
+    
+    print('\n' + Fore.YELLOW + 'Escolha a taxa de envio:' + Style.RESET_ALL)
+    print('1) Rápido (100 pps)')
+    print('2) Moderado (10 pps)')
+    print('3) Lento (1 pps)')
+    print('4) Customizado')
+    taxa_choice = input('Escolha (1/2/3/4, default=1): ').strip() or '1'
+    
+    if taxa_choice == '2':
+        intervalo = 0.1
+    elif taxa_choice == '3':
+        intervalo = 1.0
+    elif taxa_choice == '4':
         try:
-            rate = float(rate)
+            rate = float(input('Taxa (pacotes/s): ').strip() or 1)
             intervalo = 1.0 / rate if rate > 0 else 0
-        except Exception:
-            intervalo = float(input("Erro na taxa, informe intervalo em segundos: "))
-    else:
-        intervalo = float(input("Digite o intervalo entre envios (em segundos, 0 para sem intervalo): ").strip() or 0)
-
-    count = int(input("Quantidade de pacotes a enviar (0 = indefinido): ").strip() or 0)
-    duration = int(input("Duração máxima em segundos (0 = indefinido): ").strip() or 0)
-    ip_origem = input("Digite o Ip de origem (ou Enter para automatico): ").strip() or None
-    iface = input("Digite o nome da interface (ou Enter para padrão): ").strip() or None
-    logfile = input("Nome do arquivo de log (default open_send_log.json): ").strip() or 'open_send_log.json'
-
+        except ValueError:
+            intervalo = 0.5
+    else:  # taxa_choice == '1'
+        intervalo = 0.01
+    
+    print('\n' + Fore.YELLOW + 'Duração do envio:' + Style.RESET_ALL)
+    print('1) 10 pacotes')
+    print('2) 100 pacotes')
+    print('3) 1000 pacotes')
+    print('4) Contínuo (Ctrl+C para parar)')
+    duracao_choice = input('Escolha (1/2/3/4, default=1): ').strip() or '1'
+    
+    if duracao_choice == '2':
+        count = 100
+    elif duracao_choice == '3':
+        count = 1000
+    elif duracao_choice == '4':
+        count = 0
+    else:  # duracao_choice == '1'
+        count = 10
+    
+    duration = 0
+    ip_origem = input(Fore.YELLOW + '→ IP de origem (Enter para automático): ' + Style.RESET_ALL).strip() or None
+    iface = input(Fore.YELLOW + '→ Interface (Enter para padrão): ' + Style.RESET_ALL).strip() or None
+    logfile = input(Fore.YELLOW + '→ Arquivo de log (Enter para open_send_log.json): ' + Style.RESET_ALL).strip() or 'open_send_log.json'
+    
+    print('\n' + Fore.CYAN + 'Iniciando envio de SYNs...' + Style.RESET_ALL + '\n')
     enviar_syn(ip_destino, porta_destino, intervalo=intervalo, count=count, duration=duration, origem_ip=ip_origem, iface=iface, logfile=logfile)

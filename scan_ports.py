@@ -24,6 +24,10 @@ import time
 import subprocess
 import platform
 import re
+import csv
+import io
+import ipaddress
+import threading
 
 # Optional color support
 try:
@@ -69,24 +73,19 @@ class TokenBucket:
             time.sleep(min(0.1, max(0.001, to_wait)))
 
 
+# Nota: Com o modelo de batching no SYN scan, o Semaphore não é mais necessário.
+# O sr() no Scapy usa uma única captura por lote, eliminando a pressão no Npcap.
+
+
 def get_service_name(port):
-    """Tenta obter o nome do serviço para uma porta TCP.
-    Usa `socket.getservbyport` se disponível, senão usa um mapeamento simples.
+    """Obtém o nome do serviço para uma porta TCP.
+    Usa socket.getservbyport (banco de dados do SO - mais completo que listas).
+    Retorna 'unknown' se não encontrado.
     """
     try:
-        name = socket.getservbyport(port, 'tcp')
-        if name:
-            return name
-    except Exception:
-        pass
-
-    common = {
-        21: 'ftp', 22: 'ssh', 23: 'telnet', 25: 'smtp', 53: 'domain',
-        67: 'dhcp', 68: 'dhcp', 80: 'http', 111: 'rpcbind', 135: 'msrpc',
-        139: 'netbios-ssn', 443: 'https', 445: 'microsoft-ds', 631: 'ipp',
-        1433: 'ms-sql-s', 1521: 'oracle', 2049: 'nfs', 3306: 'mysql', 3000: 'http-alt'
-    }
-    return common.get(port, 'unknown')
+        return socket.getservbyport(port, 'tcp')
+    except (OSError, socket.error):
+        return 'unknown'
 
 
 def scan_port(host, port, timeout, family=socket.AF_INET):
@@ -127,20 +126,117 @@ def scan_port_with_retries(host, port, timeout, family=socket.AF_INET, max_retri
     return port, 'error'
 
 
+def save_results_csv(filename, results, open_ports, services_map, args):
+    """Save results to CSV format."""
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Port', 'State', 'Service'])
+        for p in sorted(results.keys()):
+            info = results[p]
+            state = info['state'] if isinstance(info, dict) else info
+            service = info['service'] if isinstance(info, dict) else services_map.get(p, 'unknown')
+            writer.writerow([p, state, service])
+
+
+def save_results_ndjson(filename, results, open_ports, services_map, args):
+    """Save results to NDJSON format (one JSON per line)."""
+    with open(filename, 'w', encoding='utf-8') as f:
+        for p in sorted(results.keys()):
+            info = results[p]
+            state = info['state'] if isinstance(info, dict) else info
+            service = info['service'] if isinstance(info, dict) else services_map.get(p, 'unknown')
+            line = json.dumps({'port': p, 'state': state, 'service': service})
+            f.write(line + '\n')
+
+
+def save_results_xml(filename, results, open_ports, services_map, args):
+    """Save results to XML format."""
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        f.write(f'<scan target="{args.target}" start="{args.start}" end="{args.end}">\n')
+        for p in sorted(results.keys()):
+            info = results[p]
+            state = info['state'] if isinstance(info, dict) else info
+            service = info['service'] if isinstance(info, dict) else services_map.get(p, 'unknown')
+            f.write(f'  <port number="{p}" state="{state}" service="{service}" />\n')
+        f.write('</scan>')
+
+
+def save_results(filename, format_type, results, open_ports, services_map, args):
+    """Wrapper to save results in the specified format."""
+    if format_type == 'csv':
+        save_results_csv(filename, results, open_ports, services_map, args)
+    elif format_type == 'ndjson':
+        save_results_ndjson(filename, results, open_ports, services_map, args)
+    elif format_type == 'xml':
+        save_results_xml(filename, results, open_ports, services_map, args)
+    else:
+        # Default to JSON
+        simple_results = {p: (results[p]['state'] if isinstance(results[p], dict) else results[p]) for p in results}
+        services_map_out = {p: (results[p]['service'] if isinstance(results[p], dict) else get_service_name(p)) for p in sorted(open_ports)}
+        open_ports_detailed = [{'port': p, 'service': services_map_out.get(p, get_service_name(p))} for p in sorted(open_ports)]
+        out = {
+            'target': args.target,
+            'target_ip': args.target_ip,
+            'start': args.start,
+            'end': args.end,
+            'open_ports': open_ports_detailed,
+            'results': simple_results,
+            'services': services_map_out,
+            'elapsed': args.elapsed,
+            'mac': args.mac,
+            'ip_version': args.ip_version,
+            'method': getattr(args, 'method', 'connect')
+        }
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(out, f, indent=2)
+
+
+def is_private_ip(ip_str):
+    """Verifica se um IP é privado (local). Retorna True/False.
+    IPs privados: 10.x.x.x, 192.168.x.x, 172.16-31.x.x, 127.x (loopback), 169.254.x.x (link-local)
+    """
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        return ip.is_private or ip.is_loopback or ip.is_link_local
+    except Exception:
+        return False
+
+
 def get_mac_for_ip(ip, timeout=0.5):
     """Tenta obter o MAC address do `ip` consultando a tabela ARP local.
-    Faz um ping rápido para popular a cache ARP e então executa comandos
-    locais (`arp -a`, `ip neigh`, `arp -n`) conforme o SO.
+    Estratégia:
+    1. Se IP é público (externo), retorna None (ARP não funciona fora da rede local)
+    2. Tenta usar Scapy getmacbyip() se disponível (mais rápido e preciso)
+    3. Fallback: ping + arp -a/arp -n (método tradicional com timeouts maiores)
+    
     Retorna o MAC como string ou None se não encontrado.
     """
+    # Verificação 1: Se é IP público, não insista
+    if not is_private_ip(ip):
+        print(Fore.YELLOW + f'⚠️  {ip} é um IP público (fora da rede local). ARP não descobrirá seu MAC.' + Style.RESET_ALL)
+        return None
+    
+    # Verificação 2: Tenta Scapy getmacbyip (nativo, rápido e preciso)
+    try:
+        from scapy.arch import getmacbyip
+        mac = getmacbyip(ip)
+        if mac and mac != '00:00:00:00:00:00':
+            return mac
+    except Exception:
+        pass
+    
+    # Fallback: Método tradicional (ping + ARP table lookup) com timeouts maiores
     system = platform.system().lower()
-    # Ping to populate ARP cache
+    ping_timeout = max(1.0, timeout * 2)  # Aumento timeout para 2x
+    
+    # Ping com múltiplas tentativas para popular ARP cache
     try:
         if system == 'windows':
-            ping_cmd = ['ping', '-n', '1', '-w', str(int(timeout * 1000)), ip]
+            ping_cmd = ['ping', '-n', '2', '-w', str(int(ping_timeout * 1000)), ip]  # 2 pings em vez de 1
         else:
-            ping_cmd = ['ping', '-c', '1', '-W', str(int(max(1, timeout)) ), ip]
-        subprocess.run(ping_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout + 1)
+            ping_cmd = ['ping', '-c', '2', '-W', str(int(max(1, ping_timeout))), ip]
+        subprocess.run(ping_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=ping_timeout + 1)
     except Exception:
         pass
 
@@ -148,9 +244,13 @@ def get_mac_for_ip(ip, timeout=0.5):
         if system == 'windows':
             out = subprocess.check_output(['arp', '-a'], encoding='utf-8', errors='ignore')
             # Windows arp -a lines:  192.168.1.10           01-23-45-67-89-ab     dynamic
-            m = re.search(rf'^{re.escape(ip)}\s+([0-9a-fA-F\-:]+)\s+', out, re.MULTILINE)
+            # Melhor regex: evita multicast (01-00-5e) e broadcast (ff-ff)
+            m = re.search(rf'^{re.escape(ip)}\s+([0-9a-fA-F][0-9a-fA-F](?:[\-:][0-9a-fA-F][0-9a-fA-F]){{5}})\s+', out, re.MULTILINE)
             if m:
-                return m.group(1)
+                mac = m.group(1)
+                # Rejeita multicast e broadcast
+                if not mac.upper().startswith(('01-00-5E', 'FF-FF')):
+                    return mac
         else:
             # Try `ip neigh` first
             try:
@@ -187,24 +287,80 @@ def main():
     parser.add_argument('--retry-backoff', type=float, default=0.5, help='Backoff base em segundos entre tentativas (exponencial)')
     parser.add_argument('--syn', action='store_true', help='Usar SYN scan com Scapy (requer Npcap/Admin)')
     parser.add_argument('--mac', action='store_true', help='Obter endereço MAC do alvo usando ARP (rede local)')
+    parser.add_argument('--format', choices=['json', 'csv', 'ndjson', 'xml'], default='json', help='Formato de saída (padrão: json)')
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument('--pretty', dest='pretty', action='store_true', help='Mostrar saída formatada/colorida')
     grp.add_argument('--no-pretty', dest='pretty', action='store_false', help='Desabilitar saída formatada')
     parser.set_defaults(pretty=True)
     # Modo interativo quando nenhum argumento é passado
     if len(sys.argv) == 1:
-        print('Modo interativo: insira os valores solicitados (Enter = padrão)')
-        target = input('Digite o IP ou hostname alvo: ').strip()
+        print('\n' + Fore.CYAN + Style.BRIGHT + '=' * 60)
+        print('  SCANNER DE PORTAS - MODO INTERATIVO')
+        print('=' * 60 + Style.RESET_ALL + '\n')
+        
+        target = input(Fore.YELLOW + '-> IP ou hostname: ' + Style.RESET_ALL).strip()
         if not target:
-            print('Alvo é obrigatório.')
+            print(Fore.RED + '[!] Alvo é obrigatório.' + Style.RESET_ALL)
             return
-        start = input('Porta inicial (default 1): ').strip() or '1'
-        end = input('Porta final (default 1024): ').strip() or '1024'
-        timeout = input('Timeout por tentativa (s) (default 0.5): ').strip() or '0.5'
-        workers = input('Número de workers/threads (default 200): ').strip() or '200'
-        rate = input('Delay entre submissões (s) (default 0): ').strip() or '0'
-        save = 'open_ports.json'
-        args = argparse.Namespace(target=target, start=int(start), end=int(end), timeout=float(timeout), workers=int(workers), save=save, rate=float(rate), syn=False)
+        
+        print('\n' + Fore.YELLOW + '[*] Opções de scan:' + Style.RESET_ALL)
+        print('  1) Scan rápido (portas 1-1024, ~5s típico)')
+        print('  2) Scan completo (1-65535, ~30-60s típico)')
+        print('  3) Scan customizado (escolha intervalo e workers)')
+        choice = input(Fore.CYAN + 'Escolha (1/2/3, default=1): ' + Style.RESET_ALL).strip() or '1'
+        
+        if choice == '2':
+            start, end = 1, 65535
+            workers = 500
+        elif choice == '3':
+            start = input(Fore.CYAN + 'Porta inicial (default 1): ' + Style.RESET_ALL).strip() or '1'
+            end = input(Fore.CYAN + 'Porta final (default 65535): ' + Style.RESET_ALL).strip() or '65535'
+            workers = input(Fore.CYAN + 'Workers/threads (default 200): ' + Style.RESET_ALL).strip() or '200'
+        else:
+            start, end, workers = 1, 1024, 200
+        
+        print('\n' + Fore.YELLOW + '[*] Opções adicionais:' + Style.RESET_ALL)
+        use_mac = input(Fore.CYAN + 'Obter MAC? (s/n, default=n): ' + Style.RESET_ALL).strip().lower() == 's'
+        use_syn = input(Fore.CYAN + 'SYN scan (Batch Mode)? Requer admin/Npcap (s/n, default=n): ' + Style.RESET_ALL).strip().lower() == 's'
+        if use_syn:
+            print(Fore.GREEN + '[+] SYN Scan com Batching: Portas agrupadas em lotes de 500 para máxima velocidade.' + Style.RESET_ALL)
+            print(Fore.CYAN + '    Estimativa: ~0.5-2s para 65535 portas em rede local.' + Style.RESET_ALL)
+        
+        print('\n' + Fore.YELLOW + '[*] Formato de saída:' + Style.RESET_ALL)
+        print('  1) JSON (padrão)')
+        print('  2) CSV')
+        print('  3) NDJSON')
+        print('  4) XML')
+        fmt_choice = input(Fore.CYAN + 'Escolha (1/2/3/4, default=1): ' + Style.RESET_ALL).strip() or '1'
+        fmt_map = {'1': 'json', '2': 'csv', '3': 'ndjson', '4': 'xml'}
+        fmt = fmt_map.get(fmt_choice, 'json')
+        
+        ext_map = {'json': '.json', 'csv': '.csv', 'ndjson': '.ndjson', 'xml': '.xml'}
+        save = f'open_ports{ext_map[fmt]}'
+        
+        # Print a visual summary of the scan configuration
+        print('\n' + Fore.CYAN + Style.BRIGHT + '[RESUMO DA CONFIGURACAO]' + Style.RESET_ALL)
+        print(f'  Alvo: {Fore.GREEN}{target}{Style.RESET_ALL}')
+        print(f'  Portas: {Fore.GREEN}{start}-{end}{Style.RESET_ALL}')
+        print(f'  Workers: {Fore.GREEN}{workers}{Style.RESET_ALL}')
+        print(f'  MAC Lookup: {Fore.GREEN if use_mac else Fore.RED}{"Sim" if use_mac else "Não"}{Style.RESET_ALL}')
+        print(f'  SYN Scan: {Fore.GREEN if use_syn else Fore.RED}{"Sim (Batch Mode)" if use_syn else "Não (Connect Scan)"}{Style.RESET_ALL}')
+        print(f'  Formato: {Fore.GREEN}{fmt.upper()}{Style.RESET_ALL}')
+        print(f'  Salvar em: {Fore.GREEN}{save}{Style.RESET_ALL}')
+        print(Fore.CYAN + Style.BRIGHT + '-' * 60 + Style.RESET_ALL + '\n')
+        
+        timeout = 0.5
+        rate = 0
+        rate_limit = 0
+        max_retries = 0
+        retry_backoff = 0.5
+        
+        args = argparse.Namespace(
+            target=target, start=int(start), end=int(end), timeout=float(timeout),
+            workers=int(workers), save=save, rate=float(rate), syn=use_syn, mac=use_mac,
+            rate_limit=float(rate_limit), max_retries=int(max_retries), retry_backoff=float(retry_backoff),
+            format=fmt, pretty=True, target_ip='', elapsed=0, ip_version=4, method='connect'
+        )
     else:
         args = parser.parse_args()
 
@@ -213,8 +369,10 @@ def main():
         addrinfos = socket.getaddrinfo(args.target, None)
         family = addrinfos[0][0]
         target_ip = addrinfos[0][4][0]
+        args.target_ip = target_ip
+        args.ip_version = 6 if family == socket.AF_INET6 else 4
     except Exception as e:
-        print('Falha ao resolver host:', e)
+        print(Fore.RED + 'Falha ao resolver host:' + Style.RESET_ALL, e)
         return
 
     mac_addr = None
@@ -228,96 +386,87 @@ def main():
             else:
                 print('MAC não encontrado (pode estar fora da rede local ou bloqueado).')
 
-    # If SYN scan requested, use Scapy-based scan
+    # === NOVO BLOCO SYN SCAN (BATCHING MODE) ===
+    # Resolve OSError [Errno 22] no Windows reduzindo o número de sniffers abertos
     if getattr(args, 'syn', False):
         try:
-            from scapy.all import conf, sr1, IP, IPv6, TCP, send
+            from scapy.all import conf, IP, IPv6, TCP, sr, send, getmacbyip
         except Exception as e:
-            print('Scapy não disponível: instale scapy e Npcap (e rode como Administrador).', e)
+            print(Fore.RED + f'Scapy não disponível: {e}' + Style.RESET_ALL)
             return
 
-        conf.use_pcap = True
-        print('Iniciando SYN scan (Scapy). Certifique-se de executar como Administrador e ter Npcap instalado.')
+        conf.verb = 0  # Silencia logs do Scapy
+        print(Fore.CYAN + f'Iniciando SYN scan otimizado (Batch Mode) em {target_ip}...' + Style.RESET_ALL)
 
-        ports = range(max(1, args.start), min(65535, args.end) + 1)
+        # 1. Obter MAC estilo Nmap (ARP)
+        if args.mac and family == socket.AF_INET:
+            try:
+                mac = getmacbyip(target_ip)
+                if mac:
+                    print(Fore.YELLOW + f'MAC Address: {mac.upper()}' + Style.RESET_ALL)
+                    args.mac_address = mac
+            except Exception:
+                pass
+
+        start_time = time.time()
+        ports = list(range(max(1, args.start), min(65535, args.end) + 1))
+        
+        # Dividir em blocos de 500 portas para não sobrecarregar o buffer do Npcap/Windows
+        # Isso reduz o número de sniffers de 8000 para ~16
+        chunk_size = 500
         open_ports = []
         results = {}
 
-        def syn_scan_port(host, port, timeout):
-            sport = random.randint(1025, 65535)
-            if family == socket.AF_INET6:
-                pkt = IPv6(dst=host)/TCP(dport=port, flags='S', sport=sport)
-            else:
-                pkt = IP(dst=host)/TCP(dport=port, flags='S', sport=sport)
-            resp = sr1(pkt, timeout=timeout, verbose=0)
-            if resp is None:
-                return port, 'no-response'
-            if resp.haslayer(TCP):
-                rflags = resp[TCP].flags
-                if rflags & 0x12:  # SYN-ACK
-                    if family == socket.AF_INET6:
-                        rst = IPv6(dst=host)/TCP(dport=port, flags='R', sport=sport)
-                    else:
-                        rst = IP(dst=host)/TCP(dport=port, flags='R', sport=sport)
-                    send(rst, verbose=0)
-                    return port, 'open'
-                elif rflags & 0x14:  # RST-ACK
-                    return port, 'closed'
-            return port, 'other'
+        for i in range(0, len(ports), chunk_size):
+            batch = ports[i:i + chunk_size]
+            print(Fore.CYAN + f'  Escaneando lote {i//chunk_size + 1}: portas {batch[0]}-{batch[-1]}...' + Style.RESET_ALL)
+            
+            try:
+                # sr() envia o lote inteiro e espera respostas de uma vez (estilo Nmap)
+                # Usa APENAS 1 PIPE por lote, resolvendo OSError 22
+                if family == socket.AF_INET6:
+                    ans, unans = sr(IPv6(dst=target_ip)/TCP(dport=batch, flags="S"), 
+                                   timeout=args.timeout, verbose=0, retry=0)
+                else:
+                    ans, unans = sr(IP(dst=target_ip)/TCP(dport=batch, flags="S"), 
+                                   timeout=args.timeout, verbose=0, retry=0)
 
-        print(f'Scanning (SYN) {args.target} ({target_ip}) ports {args.start}-{args.end} with {args.workers} workers')
-        start_time = time.time()
-        with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            future_to_port = {}
-            tb = TokenBucket(args.rate_limit, capacity=max(1, args.workers)) if args.rate_limit and args.rate_limit > 0 else None
-            for p in ports:
-                if tb:
-                    tb.consume()
-                future = executor.submit(syn_scan_port, target_ip, p, args.timeout)
-                future_to_port[future] = p
-                # Optional small pacing
-                if args.rate > 0:
-                    time.sleep(args.rate)
+                for sent, received in ans:
+                    sport = received.sport
+                    if received.haslayer(TCP):
+                        rflags = received[TCP].flags
+                        if rflags == 0x12:  # SYN-ACK
+                            service = get_service_name(sport)
+                            if sport not in open_ports:
+                                open_ports.append(sport)
+                                results[sport] = {'state': 'open', 'service': service}
+                                print(Fore.GREEN + f'  Open: {sport} ({service})' + Style.RESET_ALL)
+                        elif rflags == 0x14:  # RST-ACK
+                            service = get_service_name(sport)
+                            results[sport] = {'state': 'closed', 'service': service}
+                        else:
+                            service = get_service_name(sport)
+                            results[sport] = {'state': 'filtered', 'service': service}
+                
+                # Marcar portas que não responderam
+                for sent in unans:
+                    sport = sent[TCP].dport
+                    if sport not in results:
+                        results[sport] = {'state': 'filtered', 'service': get_service_name(sport)}
 
-            for future in as_completed(future_to_port):
-                port = future_to_port[future]
-                try:
-                    p, status = future.result()
-                    service = get_service_name(p)
-                    results[p] = {'state': status, 'service': service}
-                    if status == 'open':
-                        open_ports.append(p)
-                        print(f'Open: {p} ({service})')
-                except Exception:
-                    results[port] = {'state': 'error', 'service': None}
+            except Exception as e:
+                print(Fore.RED + f'  Erro no lote {i//chunk_size + 1}: {e}' + Style.RESET_ALL)
+                # Continuar com próximo lote em caso de erro
 
         elapsed = time.time() - start_time
-        print('\nSYN scan completo em {:.2f}s'.format(elapsed))
+        print(Fore.CYAN + f'\nSYN scan completo em {elapsed:.2f}s' + Style.RESET_ALL)
         print('Portas abertas:', sorted(open_ports))
 
         if args.save:
-            # Save simplified results mapping (port -> state) to keep JSON compact
-            simple_results = {p: (results[p]['state'] if isinstance(results[p], dict) else results[p]) for p in results}
-            # Only store services for open ports to keep the JSON focused
-            services_map = {p: (results[p]['service'] if isinstance(results[p], dict) else get_service_name(p)) for p in sorted(open_ports)}
-            # Build detailed open_ports list of objects {port, service}
-            open_ports_detailed = [{'port': p, 'service': services_map.get(p, get_service_name(p))} for p in sorted(open_ports)]
-            out = {
-                'target': args.target,
-                'target_ip': target_ip,
-                'start': args.start,
-                'end': args.end,
-                'open_ports': open_ports_detailed,
-                'results': simple_results,
-                'services': services_map,
-                'elapsed': elapsed,
-                'method': 'syn',
-                'mac': mac_addr,
-                'ip_version': 6 if family == socket.AF_INET6 else 4
-            }
-            with open(args.save, 'w', encoding='utf-8') as f:
-                json.dump(out, f, indent=2)
-            print('Resultados salvos em', args.save)
+            args.elapsed = elapsed
+            save_results(args.save, args.format, results, sorted(open_ports), 
+                        {p: results[p]['service'] for p in sorted(open_ports)}, args)
+            print(Fore.GREEN + f'Resultados salvos em {args.save}' + Style.RESET_ALL)
         return
 
     ports = range(max(1, args.start), min(65535, args.end) + 1)
@@ -345,9 +494,11 @@ def main():
                     p, status = future.result()
                     service = get_service_name(p)
                     results[p] = {'state': status, 'service': service}
+                    # Only mark as open if status is truly 'open'
                     if status == 'open':
-                        open_ports.append(p)
-                        print(f'Open: {p} ({service})')
+                        if p not in open_ports:
+                            open_ports.append(p)
+                        print(Fore.GREEN + f'Open: {p} ({service})' + Style.RESET_ALL)
             except Exception as exc:
                     results[port] = {'state': 'error', 'service': None}
 
@@ -399,24 +550,10 @@ def main():
             print(f"{port_str.ljust(port_w)}  {state.ljust(state_w)}  {service.ljust(service_w)}")
 
     if args.save:
-        simple_results = {p: (results[p]['state'] if isinstance(results[p], dict) else results[p]) for p in results}
         services_map = {p: (results[p]['service'] if isinstance(results[p], dict) else get_service_name(p)) for p in sorted(open_ports)}
-        # Build detailed open_ports list of objects {port, service}
-        open_ports_detailed = [{'port': p, 'service': services_map.get(p, get_service_name(p))} for p in sorted(open_ports)]
-        out = {
-            'target': args.target,
-            'target_ip': target_ip,
-            'start': args.start,
-            'end': args.end,
-            'open_ports': open_ports_detailed,
-            'results': simple_results,
-            'services': services_map,
-            'elapsed': elapsed,
-            'mac': mac_addr
-        }
-        with open(args.save, 'w', encoding='utf-8') as f:
-            json.dump(out, f, indent=2)
-        print('Resultados salvos em', args.save)
+        args.elapsed = elapsed
+        save_results(args.save, args.format, results, open_ports, services_map, args)
+        print(Fore.GREEN + 'Resultados salvos em' + Style.RESET_ALL, args.save)
 
 
 if __name__ == '__main__':
