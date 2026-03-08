@@ -2,17 +2,16 @@
 """
 scan_ports.py
 Rápido scanner TCP (connect scan) concorrente em Python.
-Uso seguro em Windows (não precisa de Npcap). Faça apenas em alvos autorizados.
+Uso seguro em Linux/Windows (não precisa de Npcap no modo connect). Faça apenas em alvos autorizados.
 
 Exemplos:
   python scan_ports.py 192.168.92.212 --start 1 --end 1024 --workers 200 --timeout 0.5
   python scan_ports.py example.com -s 1 -e 65535 -w 500 -t 0.3 --save results.json
-"""
-"""
+
 # scan rápido portas 1-1024
-python scan_ports.py 192.168.92.212 --start 1 --end 1024 --workers 200 --timeout 0.5
+#   python scan_ports.py 192.168.92.212 --start 1 --end 1024 --workers 200 --timeout 0.5
 # scan completo (pode demorar). Salva resultado:
-python scan_ports.py 192.168.92.212 --start 1 --end 65535 --workers 500 --timeout 0.3 --save open_ports.json
+#   python scan_ports.py 192.168.92.212 --start 1 --end 65535 --workers 500 --timeout 0.3 --save open_ports.json
 """
 import socket
 import argparse
@@ -288,6 +287,7 @@ def main():
     parser.add_argument('--syn', action='store_true', help='Usar SYN scan com Scapy (requer Npcap/Admin)')
     parser.add_argument('--mac', action='store_true', help='Obter endereço MAC do alvo usando ARP (rede local)')
     parser.add_argument('--format', choices=['json', 'csv', 'ndjson', 'xml'], default='json', help='Formato de saída (padrão: json)')
+    parser.add_argument('--only-open', action='store_true', help='Na tabela, mostrar apenas portas abertas (útil para scans grandes)')
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument('--pretty', dest='pretty', action='store_true', help='Mostrar saída formatada/colorida')
     grp.add_argument('--no-pretty', dest='pretty', action='store_false', help='Desabilitar saída formatada')
@@ -359,7 +359,7 @@ def main():
             target=target, start=int(start), end=int(end), timeout=float(timeout),
             workers=int(workers), save=save, rate=float(rate), syn=use_syn, mac=use_mac,
             rate_limit=float(rate_limit), max_retries=int(max_retries), retry_backoff=float(retry_backoff),
-            format=fmt, pretty=True, target_ip='', elapsed=0, ip_version=4, method='connect'
+            format=fmt, pretty=True, only_open=False, target_ip='', elapsed=0, ip_version=4, method='connect'
         )
     else:
         args = parser.parse_args()
@@ -491,41 +491,47 @@ def main():
         for future in as_completed(future_to_port):
             port = future_to_port[future]
             try:
-                    p, status = future.result()
-                    service = get_service_name(p)
-                    results[p] = {'state': status, 'service': service}
-                    # Only mark as open if status is truly 'open'
-                    if status == 'open':
-                        if p not in open_ports:
-                            open_ports.append(p)
-                        print(Fore.GREEN + f'Open: {p} ({service})' + Style.RESET_ALL)
-            except Exception as exc:
-                    results[port] = {'state': 'error', 'service': None}
+                p, status = future.result()
+                service = get_service_name(p)
+                results[p] = {'state': status, 'service': service}
+                # Only mark as open if status is truly 'open'
+                if status == 'open':
+                    if p not in open_ports:
+                        open_ports.append(p)
+                    print(Fore.GREEN + f'Open: {p} ({service})' + Style.RESET_ALL)
+            except Exception:
+                results[port] = {'state': 'error', 'service': 'unknown'}
 
     elapsed = time.time() - start_time
     print('\nScan completo em {:.2f}s'.format(elapsed))
     print('Portas abertas:', sorted(open_ports))
 
     # Print table similar to nmap: aligned columns PORT  STATE  SERVICE
-    rows = []
+    all_rows = []
     for p in sorted(results.keys()):
         info = results[p]
         state = info['state'] if isinstance(info, dict) else info
         service = info['service'] if isinstance(info, dict) else get_service_name(p)
-        rows.append((f"{p}/tcp", state, service))
+        if service is None:
+            service = 'unknown'
+        all_rows.append((f"{p}/tcp", state, service))
 
-    def print_pretty(rows, elapsed, target):
-        total = len(rows)
+    def print_pretty(rows, elapsed, target, total_scanned):
         open_count = sum(1 for r in rows if r[1] == 'open')
-        title = f" Scan results for {target} — {open_count}/{total} open (elapsed {elapsed:.2f}s) "
+        title = f" Scan results for {target} — {open_count}/{total_scanned} open (elapsed {elapsed:.2f}s) "
         sep = '=' * max(60, len(title) + 4)
         print(Fore.CYAN + Style.BRIGHT + sep)
         print(Fore.CYAN + Style.BRIGHT + title.center(len(sep)))
         print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
 
-        port_w = max([len(r[0]) for r in rows] + [4])
-        state_w = max([len(r[1]) for r in rows] + [5])
-        service_w = max([len(r[2]) for r in rows] + [7])
+        if not rows:
+            print(Fore.YELLOW + '  Nenhuma porta encontrada.' + Style.RESET_ALL)
+            print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
+            return
+
+        port_w = max(len(r[0]) for r in rows + [('PORT', '', '')])
+        state_w = max(len(r[1]) for r in rows + [('', 'STATE', '')])
+        service_w = max(len(r[2]) for r in rows + [('', '', 'SERVICE')])
 
         header = f"| {'PORT'.ljust(port_w)} | {'STATE'.ljust(state_w)} | {'SERVICE'.ljust(service_w)} |"
         print(Fore.CYAN + header)
@@ -537,17 +543,25 @@ def main():
 
         print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
 
-    if getattr(args, 'pretty', False):
-        print_pretty(rows, elapsed, args.target)
-    else:
-        port_w = max([len(r[0]) for r in rows] + [4])
-        state_w = max([len(r[1]) for r in rows] + [5])
-        service_w = max([len(r[2]) for r in rows] + [7])
+    only_open = getattr(args, 'only_open', False)
+    display_rows = [r for r in all_rows if r[1] == 'open'] if only_open else all_rows
 
-        print()
-        print(f"{ 'PORT'.ljust(port_w) }  { 'STATE'.ljust(state_w) }  { 'SERVICE'.ljust(service_w) }")
-        for port_str, state, service in rows:
-            print(f"{port_str.ljust(port_w)}  {state.ljust(state_w)}  {service.ljust(service_w)}")
+    if getattr(args, 'pretty', False):
+        print_pretty(display_rows, elapsed, args.target, len(all_rows))
+    else:
+        rows_to_print = display_rows
+        if not rows_to_print:
+            print(Fore.YELLOW + 'Nenhuma porta encontrada.' + Style.RESET_ALL)
+        else:
+            port_w = max(len(r[0]) for r in rows_to_print + [('PORT', '', '')])
+            state_w = max(len(r[1]) for r in rows_to_print + [('', 'STATE', '')])
+            service_w = max(len(r[2]) for r in rows_to_print + [('', '', 'SERVICE')])
+
+            print()
+            print(f"{'PORT'.ljust(port_w)}  {'STATE'.ljust(state_w)}  {'SERVICE'.ljust(service_w)}")
+            for port_str, state, service in rows_to_print:
+                color = Fore.GREEN if state == 'open' else (Fore.YELLOW if state in ('filtered', 'no-response') else Fore.RED)
+                print(f"{port_str.ljust(port_w)}  {color}{state.ljust(state_w)}{Style.RESET_ALL}  {service.ljust(service_w)}")
 
     if args.save:
         services_map = {p: (results[p]['service'] if isinstance(results[p], dict) else get_service_name(p)) for p in sorted(open_ports)}

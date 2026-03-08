@@ -1,6 +1,6 @@
-# 📦 PacketSend v1
+# 📦 PacketSender-V2
 
-**PacketSend** é um conjunto de scripts em Python para testes de redes e análise: envio de SYNs, verificação de capturas e escaneamento de portas. O objetivo é oferecer ferramentas simples, seguras (quando usadas em redes autorizadas) e fáceis de auditar.
+**PacketSender-V2** é um conjunto de scripts Python para testes de rede e análise: escaneamento de portas TCP, envio de pacotes SYN e verificação de capturas. Ferramentas simples, seguras (em redes autorizadas) e fáceis de auditar.
 
 Esta documentação foi organizada para ser direta e explicativa — cada seção contém instruções passo a passo e exemplos que você pode copiar.
 
@@ -193,13 +193,46 @@ Vantagem: Muito rápido, menos conspícuo, preciso
 
 ---
 
+## 📤 PacketSend.py — Gerador de Pacotes SYN
+
+### Modo Interativo (Principal)
+```bash
+python PacketSend.py
+# Segue o menu: destino, taxa, quantidade, log, sniffer
+```
+
+### Modo CLI (Avançado)
+```bash
+# Enviar 10 SYNs para porta 80
+python PacketSend.py --dst 192.168.0.1 --port 80 --count 10
+
+# Envio contínuo em 10 pps, com sniffer ativo
+python PacketSend.py --dst 192.168.0.1 --port 443 --count 0 --interval 0.1 --capture
+
+# Ver todas as opções
+python PacketSend.py --help
+```
+
+| Flag | Descrição | Padrão |
+|------|-----------|--------|
+| `--dst` | IP ou hostname de destino | — |
+| `--port` | Porta TCP de destino | — |
+| `--count` | Nº de pacotes (0 = contínuo) | 10 |
+| `--interval` | Intervalo entre pacotes (s) | 0.01 |
+| `--src` | IP de origem | auto |
+| `--iface` | Interface de rede | auto |
+| `--logfile` | Arquivo de log JSON | open_send_log.json |
+| `--capture` | Ativar sniffer | desativado |
+
+---
+
 ## 🧪 Testes
 
 ```bash
 # Executar testes
 pytest tests/ -v
 
-# Resultado esperado: 6 passed in 0.23s
+# Resultado esperado: 16 passed
 ```
 
 ---
