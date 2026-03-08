@@ -125,6 +125,83 @@ def scan_port_with_retries(host, port, timeout, family=socket.AF_INET, max_retri
     return port, 'error'
 
 
+# ---------------------------------------------------------------------------
+# Banner grabbing
+# ---------------------------------------------------------------------------
+
+HTTP_PROBE = b'HEAD / HTTP/1.0\r\nHost: target\r\n\r\n'
+
+def grab_banner(host, port, timeout=2.0, family=socket.AF_INET):
+    """Tenta ler o banner de uma porta aberta (versão do serviço).
+    Estratégia:
+      1. Conecta e aguarda banner passivo (SSH, FTP, SMTP...)
+      2. Se nada chegar, envia probe HTTP (web servers)
+    Retorna string com até 100 chars ou None.
+    """
+    try:
+        s = socket.socket(family, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        addr = (host, port, 0, 0) if family == socket.AF_INET6 else (host, port)
+        s.connect(addr)
+        # 1. Aguarda banner passivo
+        try:
+            s.settimeout(1.5)
+            data = s.recv(1024)
+            if data:
+                banner = data.decode('utf-8', errors='replace').strip()
+                return ' '.join(banner.split())[:100]
+        except socket.timeout:
+            pass
+        # 2. Probe HTTP
+        try:
+            s.send(HTTP_PROBE)
+            s.settimeout(1.5)
+            data = s.recv(1024)
+            if data:
+                # Pega apenas a primeira linha (ex: HTTP/1.1 200 OK  Server: nginx)
+                first = data.decode('utf-8', errors='replace').split('\n')[0].strip()
+                return first[:100]
+        except Exception:
+            pass
+    except Exception:
+        pass
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Timing Templates (como nmap -T1 a -T5)
+# ---------------------------------------------------------------------------
+
+TIMING_PRESETS = {
+    'T1': {'workers': 10,  'timeout': 5.0, 'rate_limit': 5.0,   'label': 'Sneaky  (lento, stealth)'},
+    'T2': {'workers': 50,  'timeout': 1.5, 'rate_limit': 50.0,  'label': 'Polite  (moderado)'},
+    'T3': {'workers': 200, 'timeout': 0.5, 'rate_limit': 0.0,   'label': 'Normal  (padrão)'},
+    'T4': {'workers': 400, 'timeout': 0.3, 'rate_limit': 0.0,   'label': 'Aggressive (rápido)'},
+    'T5': {'workers': 500, 'timeout': 0.1, 'rate_limit': 0.0,   'label': 'Insane  (muito rápido, pode perder portas)'},
+}
+
+def apply_timing(args):
+    """Aplica preset de timing ao args se --timing foi fornecido."""
+    t = getattr(args, 'timing', None)
+    if not t:
+        return
+    key = t.upper()
+    preset = TIMING_PRESETS.get(key)
+    if not preset:
+        print(Fore.YELLOW + f'[!] Timing "{t}" inválido. Use T1-T5.' + Style.RESET_ALL)
+        return
+    args.workers   = preset['workers']
+    args.timeout   = preset['timeout']
+    args.rate_limit = preset['rate_limit']
+    print(Fore.CYAN + f'[*] Timing {key}: {preset["label"]}' + Style.RESET_ALL)
+    print(Fore.CYAN + f'    workers={args.workers}  timeout={args.timeout}s  rate_limit={args.rate_limit or "ilimitado"}' + Style.RESET_ALL)
+
+
 def save_results_csv(filename, results, open_ports, services_map, args):
     """Save results to CSV format."""
     with open(filename, 'w', newline='', encoding='utf-8') as f:
@@ -273,7 +350,18 @@ def get_mac_for_ip(ip, timeout=0.5):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='TCP connect port scanner (concurrent)')
+    parser = argparse.ArgumentParser(
+        description='TCP connect port scanner (concurrent) — estilo nmap',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            'Timing templates:\n'
+            '  T1  Sneaky   — workers=10,  timeout=5.0s (stealth)\n'
+            '  T2  Polite   — workers=50,  timeout=1.5s (moderado)\n'
+            '  T3  Normal   — workers=200, timeout=0.5s (padrão)\n'
+            '  T4  Aggressive — workers=400, timeout=0.3s (rápido)\n'
+            '  T5  Insane   — workers=500, timeout=0.1s (máximo)\n'
+        )
+    )
     parser.add_argument('target', help='IP ou hostname a escanear')
     parser.add_argument('--start', '-s', type=int, default=1, help='Porta inicial (default: 1)')
     parser.add_argument('--end', '-e', type=int, default=1024, help='Porta final (inclusive) (default: 1024)')
@@ -288,6 +376,8 @@ def main():
     parser.add_argument('--mac', action='store_true', help='Obter endereço MAC do alvo usando ARP (rede local)')
     parser.add_argument('--format', choices=['json', 'csv', 'ndjson', 'xml'], default='json', help='Formato de saída (padrão: json)')
     parser.add_argument('--only-open', action='store_true', help='Na tabela, mostrar apenas portas abertas (útil para scans grandes)')
+    parser.add_argument('--banners', action='store_true', help='Tenta ler banner/versão das portas abertas (adiciona coluna VERSION)')
+    parser.add_argument('--timing', metavar='T1-T5', help='Template de velocidade: T1(stealth)..T5(insane). Sobrescreve --workers/--timeout')
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument('--pretty', dest='pretty', action='store_true', help='Mostrar saída formatada/colorida')
     grp.add_argument('--no-pretty', dest='pretty', action='store_false', help='Desabilitar saída formatada')
@@ -325,6 +415,17 @@ def main():
         if use_syn:
             print(Fore.GREEN + '[+] SYN Scan com Batching: Portas agrupadas em lotes de 500 para máxima velocidade.' + Style.RESET_ALL)
             print(Fore.CYAN + '    Estimativa: ~0.5-2s para 65535 portas em rede local.' + Style.RESET_ALL)
+        use_banners = input(Fore.CYAN + 'Banner grabbing? Lê versão dos serviços (s/n, default=n): ' + Style.RESET_ALL).strip().lower() == 's'
+
+        print('\n' + Fore.YELLOW + '[*] Velocidade (Timing Template):' + Style.RESET_ALL)
+        print('  1) T3 Normal    — 200 workers, 0.5s timeout  (padrão)')
+        print('  2) T4 Aggressive — 400 workers, 0.3s timeout (rápido)')
+        print('  3) T5 Insane    — 500 workers, 0.1s timeout  (máximo, pode perder portas)')
+        print('  4) T2 Polite    — 50 workers,  1.5s timeout  (moderado)')
+        print('  5) T1 Sneaky    — 10 workers,  5.0s timeout  (stealth)')
+        timing_choice = input(Fore.CYAN + 'Escolha (1-5, default=1): ' + Style.RESET_ALL).strip() or '1'
+        timing_map = {'1': 'T3', '2': 'T4', '3': 'T5', '4': 'T2', '5': 'T1'}
+        timing = timing_map.get(timing_choice, 'T3')
         
         print('\n' + Fore.YELLOW + '[*] Formato de saída:' + Style.RESET_ALL)
         print('  1) JSON (padrão)')
@@ -338,28 +439,25 @@ def main():
         ext_map = {'json': '.json', 'csv': '.csv', 'ndjson': '.ndjson', 'xml': '.xml'}
         save = f'open_ports{ext_map[fmt]}'
         
-        # Print a visual summary of the scan configuration
+        # Resumo visual
         print('\n' + Fore.CYAN + Style.BRIGHT + '[RESUMO DA CONFIGURACAO]' + Style.RESET_ALL)
-        print(f'  Alvo: {Fore.GREEN}{target}{Style.RESET_ALL}')
-        print(f'  Portas: {Fore.GREEN}{start}-{end}{Style.RESET_ALL}')
-        print(f'  Workers: {Fore.GREEN}{workers}{Style.RESET_ALL}')
-        print(f'  MAC Lookup: {Fore.GREEN if use_mac else Fore.RED}{"Sim" if use_mac else "Não"}{Style.RESET_ALL}')
-        print(f'  SYN Scan: {Fore.GREEN if use_syn else Fore.RED}{"Sim (Batch Mode)" if use_syn else "Não (Connect Scan)"}{Style.RESET_ALL}')
-        print(f'  Formato: {Fore.GREEN}{fmt.upper()}{Style.RESET_ALL}')
-        print(f'  Salvar em: {Fore.GREEN}{save}{Style.RESET_ALL}')
+        print(f'  Alvo:          {Fore.GREEN}{target}{Style.RESET_ALL}')
+        print(f'  Portas:        {Fore.GREEN}{start}-{end}{Style.RESET_ALL}')
+        print(f'  Timing:        {Fore.GREEN}{timing} — {TIMING_PRESETS[timing]["label"]}{Style.RESET_ALL}')
+        print(f'  MAC Lookup:    {Fore.GREEN if use_mac else Fore.RED}{"Sim" if use_mac else "Não"}{Style.RESET_ALL}')
+        print(f'  SYN Scan:      {Fore.GREEN if use_syn else Fore.RED}{"Sim (Batch Mode)" if use_syn else "Não (Connect Scan)"}{Style.RESET_ALL}')
+        print(f'  Banner Grab:   {Fore.GREEN if use_banners else Fore.RED}{"Sim" if use_banners else "Não"}{Style.RESET_ALL}')
+        print(f'  Formato:       {Fore.GREEN}{fmt.upper()}{Style.RESET_ALL}')
+        print(f'  Salvar em:     {Fore.GREEN}{save}{Style.RESET_ALL}')
         print(Fore.CYAN + Style.BRIGHT + '-' * 60 + Style.RESET_ALL + '\n')
         
-        timeout = 0.5
-        rate = 0
-        rate_limit = 0
-        max_retries = 0
-        retry_backoff = 0.5
-        
         args = argparse.Namespace(
-            target=target, start=int(start), end=int(end), timeout=float(timeout),
-            workers=int(workers), save=save, rate=float(rate), syn=use_syn, mac=use_mac,
-            rate_limit=float(rate_limit), max_retries=int(max_retries), retry_backoff=float(retry_backoff),
-            format=fmt, pretty=True, only_open=False, target_ip='', elapsed=0, ip_version=4, method='connect'
+            target=target, start=int(start), end=int(end),
+            timeout=0.5, workers=int(workers) if not isinstance(workers, int) else workers,
+            save=save, rate=0.0, syn=use_syn, mac=use_mac,
+            rate_limit=0.0, max_retries=0, retry_backoff=0.5,
+            format=fmt, pretty=True, only_open=False, banners=use_banners,
+            timing=timing, target_ip='', elapsed=0, ip_version=4, method='connect'
         )
     else:
         args = parser.parse_args()
@@ -374,6 +472,9 @@ def main():
     except Exception as e:
         print(Fore.RED + 'Falha ao resolver host:' + Style.RESET_ALL, e)
         return
+
+    # Aplicar timing template (sobrescreve workers/timeout se --timing foi passado)
+    apply_timing(args)
 
     mac_addr = None
     if getattr(args, 'mac', False):
@@ -469,11 +570,13 @@ def main():
             print(Fore.GREEN + f'Resultados salvos em {args.save}' + Style.RESET_ALL)
         return
 
-    ports = range(max(1, args.start), min(65535, args.end) + 1)
+    ports = list(range(max(1, args.start), min(65535, args.end) + 1))
+    total_ports = len(ports)
     open_ports = []
     results = {}
 
-    print(f'Scanning {args.target} ({target_ip}) ports {args.start}-{args.end} with {args.workers} workers')
+    print(Fore.CYAN + Style.BRIGHT + f'\nStarting scan — {args.target} ({target_ip})' + Style.RESET_ALL)
+    print(Fore.CYAN + f'Scanning {total_ports} ports ({args.start}-{args.end}) | workers={args.workers} | timeout={args.timeout}s' + Style.RESET_ALL)
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
@@ -482,86 +585,149 @@ def main():
         for p in ports:
             if tb:
                 tb.consume()
-            future = executor.submit(scan_port_with_retries, target_ip, p, args.timeout if args.timeout else 0.5, family, args.max_retries, args.retry_backoff)
+            future = executor.submit(
+                scan_port_with_retries, target_ip, p,
+                args.timeout if args.timeout else 0.5,
+                family, args.max_retries, args.retry_backoff
+            )
             future_to_port[future] = p
-            # Optional small pacing
             if args.rate > 0:
                 time.sleep(args.rate)
 
+        completed = 0
         for future in as_completed(future_to_port):
             port = future_to_port[future]
+            completed += 1
             try:
                 p, status = future.result()
                 service = get_service_name(p)
-                results[p] = {'state': status, 'service': service}
-                # Only mark as open if status is truly 'open'
+                results[p] = {'state': status, 'service': service, 'version': ''}
                 if status == 'open':
                     if p not in open_ports:
                         open_ports.append(p)
-                    print(Fore.GREEN + f'Open: {p} ({service})' + Style.RESET_ALL)
+                    print(Fore.GREEN + f'  {p}/tcp  OPEN  {service}' + Style.RESET_ALL)
             except Exception:
-                results[port] = {'state': 'error', 'service': 'unknown'}
+                results[port] = {'state': 'error', 'service': 'unknown', 'version': ''}
 
+            # --- Barra de progresso com ETA ---
+            elapsed_now = time.time() - start_time
+            if elapsed_now > 0 and completed > 0:
+                eta = (elapsed_now / completed) * (total_ports - completed)
+                eta_str = f'{eta:.0f}s'
+            else:
+                eta_str = '?'
+            pct = completed / total_ports * 100
+            bar_len = 28
+            filled = int(bar_len * completed / total_ports)
+            bar = '=' * filled + ('>' if filled < bar_len else '') + ' ' * max(0, bar_len - filled - 1)
+            print(
+                f'\r  [{bar}] {pct:5.1f}%  ({completed}/{total_ports})  ETA: {eta_str}   ',
+                end='', flush=True
+            )
+
+    print()  # Quebra a linha da barra de progresso
     elapsed = time.time() - start_time
-    print('\nScan completo em {:.2f}s'.format(elapsed))
-    print('Portas abertas:', sorted(open_ports))
 
-    # Print table similar to nmap: aligned columns PORT  STATE  SERVICE
-    all_rows = []
+    # --- Banner grabbing para portas abertas ---
+    use_banners = getattr(args, 'banners', False)
+    if use_banners and open_ports:
+        print(Fore.CYAN + f'\n[*] Banner grabbing em {len(open_ports)} porta(s) abertas...' + Style.RESET_ALL)
+        for p in sorted(open_ports):
+            banner = grab_banner(target_ip, p, timeout=max(1.5, args.timeout * 3), family=family)
+            if banner:
+                results[p]['version'] = banner
+                print(Fore.GREEN + f'  {p}/tcp  {banner}' + Style.RESET_ALL)
+            else:
+                print(Fore.YELLOW + f'  {p}/tcp  (sem banner)' + Style.RESET_ALL)
+
+    print(Fore.CYAN + f'\nScan concluído em {elapsed:.2f}s' + Style.RESET_ALL)
+    print(Fore.GREEN + f'Portas abertas ({len(open_ports)}): {sorted(open_ports)}' + Style.RESET_ALL)
+
+    # --- Monta linhas da tabela ---
+    all_rows = []  # (port_str, state, service, version)
     for p in sorted(results.keys()):
         info = results[p]
-        state = info['state'] if isinstance(info, dict) else info
-        service = info['service'] if isinstance(info, dict) else get_service_name(p)
+        state   = info['state']   if isinstance(info, dict) else info
+        service = info.get('service', 'unknown') if isinstance(info, dict) else get_service_name(p)
+        version = info.get('version', '')        if isinstance(info, dict) else ''
         if service is None:
             service = 'unknown'
-        all_rows.append((f"{p}/tcp", state, service))
+        all_rows.append((f'{p}/tcp', state, service, version or ''))
 
-    def print_pretty(rows, elapsed, target, total_scanned):
-        open_count = sum(1 for r in rows if r[1] == 'open')
-        title = f" Scan results for {target} — {open_count}/{total_scanned} open (elapsed {elapsed:.2f}s) "
-        sep = '=' * max(60, len(title) + 4)
-        print(Fore.CYAN + Style.BRIGHT + sep)
-        print(Fore.CYAN + Style.BRIGHT + title.center(len(sep)))
+    # --- print_pretty estilo nmap ---
+    def print_pretty(rows, elapsed, target, target_ip, total_scanned, show_banners=False):
+        sep = '=' * 62
+        open_count  = sum(1 for r in rows if r[1] == 'open')
+        closed_count = total_scanned - len(rows)  # número de portas não mostradas
+
+        print()
+        print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
+        print(Fore.CYAN + Style.BRIGHT + f'  Nmap-like scan report for {target} ({target_ip})' + Style.RESET_ALL)
+        print(Fore.CYAN + f'  Host is up  |  {open_count} open port(s)  |  elapsed {elapsed:.2f}s' + Style.RESET_ALL)
         print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
 
+        if closed_count > 0:
+            print(Fore.YELLOW + f'  Not shown: {closed_count} closed/filtered port(s)' + Style.RESET_ALL)
+
         if not rows:
-            print(Fore.YELLOW + '  Nenhuma porta encontrada.' + Style.RESET_ALL)
+            print(Fore.YELLOW + '  Nenhuma porta aberta encontrada.' + Style.RESET_ALL)
             print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
             return
 
-        port_w = max(len(r[0]) for r in rows + [('PORT', '', '')])
-        state_w = max(len(r[1]) for r in rows + [('', 'STATE', '')])
-        service_w = max(len(r[2]) for r in rows + [('', '', 'SERVICE')])
+        # Colunas dinâmicas
+        port_w    = max((len(r[0]) for r in rows), default=7)
+        state_w   = max((len(r[1]) for r in rows), default=5)
+        service_w = max((len(r[2]) for r in rows), default=7)
+        version_w = max((len(r[3]) for r in rows), default=7) if show_banners else 0
 
-        header = f"| {'PORT'.ljust(port_w)} | {'STATE'.ljust(state_w)} | {'SERVICE'.ljust(service_w)} |"
-        print(Fore.CYAN + header)
-        print(Fore.CYAN + '-' * len(header) + Style.RESET_ALL)
-        for port_str, state, service in rows:
+        # Header
+        header = f"  {'PORT'.ljust(port_w)}  {'STATE'.ljust(state_w)}  {'SERVICE'.ljust(service_w)}"
+        if show_banners:
+            header += f"  {'VERSION'.ljust(version_w)}"
+        print()
+        print(Fore.CYAN + header + Style.RESET_ALL)
+        print(Fore.CYAN + '  ' + '-' * (len(header) - 2) + Style.RESET_ALL)
+
+        for row in rows:
+            port_str, state, service, version = row
             color = Fore.GREEN if state == 'open' else (Fore.YELLOW if state in ('filtered', 'no-response') else Fore.RED)
-            state_txt = state.upper() if isinstance(state, str) else str(state)
-            print(f"| {port_str.ljust(port_w)} | {color}{state_txt.ljust(state_w)}{Style.RESET_ALL} | {service.ljust(service_w)} |")
+            state_txt = state.upper()
+            line = f"  {port_str.ljust(port_w)}  {color}{state_txt.ljust(state_w)}{Style.RESET_ALL}  {service.ljust(service_w)}"
+            if show_banners:
+                line += f"  {Fore.YELLOW}{version.ljust(version_w)}{Style.RESET_ALL}"
+            print(line)
 
         print(Fore.CYAN + Style.BRIGHT + sep + Style.RESET_ALL)
 
     only_open = getattr(args, 'only_open', False)
-    display_rows = [r for r in all_rows if r[1] == 'open'] if only_open else all_rows
+    show_banners = getattr(args, 'banners', False)
+    # Por padrão no modo pretty mostra só open (estilo nmap). --no-only-open mostra tudo.
+    display_rows = [r for r in all_rows if r[1] == 'open'] if (only_open or getattr(args, 'pretty', False)) else all_rows
 
     if getattr(args, 'pretty', False):
-        print_pretty(display_rows, elapsed, args.target, len(all_rows))
+        print_pretty(display_rows, elapsed, args.target, target_ip, len(all_rows), show_banners)
     else:
         rows_to_print = display_rows
         if not rows_to_print:
             print(Fore.YELLOW + 'Nenhuma porta encontrada.' + Style.RESET_ALL)
         else:
-            port_w = max(len(r[0]) for r in rows_to_print + [('PORT', '', '')])
-            state_w = max(len(r[1]) for r in rows_to_print + [('', 'STATE', '')])
-            service_w = max(len(r[2]) for r in rows_to_print + [('', '', 'SERVICE')])
+            port_w    = max(len(r[0]) for r in rows_to_print)
+            state_w   = max(len(r[1]) for r in rows_to_print)
+            service_w = max(len(r[2]) for r in rows_to_print)
 
             print()
-            print(f"{'PORT'.ljust(port_w)}  {'STATE'.ljust(state_w)}  {'SERVICE'.ljust(service_w)}")
-            for port_str, state, service in rows_to_print:
+            header = f"{'PORT'.ljust(port_w)}  {'STATE'.ljust(state_w)}  {'SERVICE'.ljust(service_w)}"
+            if show_banners:
+                version_w = max(len(r[3]) for r in rows_to_print)
+                header += f"  {'VERSION'.ljust(version_w)}"
+            print(header)
+            for row in rows_to_print:
+                port_str, state, service, version = row
                 color = Fore.GREEN if state == 'open' else (Fore.YELLOW if state in ('filtered', 'no-response') else Fore.RED)
-                print(f"{port_str.ljust(port_w)}  {color}{state.ljust(state_w)}{Style.RESET_ALL}  {service.ljust(service_w)}")
+                line = f"{port_str.ljust(port_w)}  {color}{state.ljust(state_w)}{Style.RESET_ALL}  {service.ljust(service_w)}"
+                if show_banners:
+                    line += f"  {version.ljust(version_w)}"
+                print(line)
 
     if args.save:
         services_map = {p: (results[p]['service'] if isinstance(results[p], dict) else get_service_name(p)) for p in sorted(open_ports)}
